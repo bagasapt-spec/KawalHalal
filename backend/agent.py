@@ -5,6 +5,7 @@ halal, pasti lolos, atau pasti disetujui. Agen hanya menilai kelengkapan berkas 
 menandai celah bukti. Penetapan kehalalan ada di LPH, Komite Fatwa, dan BPJPH.
 """
 import json
+import logging
 import os
 import re
 from typing import Any, Dict, List, Optional
@@ -19,6 +20,8 @@ from tools import (
 )
 
 load_dotenv()
+
+logger = logging.getLogger("kawalhalal.agent")
 
 MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
 MAX_LANGKAH = 4  # batas siklus ReAct (cegah loop tak berujung / timeout)
@@ -436,3 +439,13 @@ class KawalHalalAgent:
             "tidak_dikenali",
             "Kirim nomor sertifikat (mis. ID3111000012345), daftar bahan (mis. 'bahan: gula, gelatin'), atau foto label via /api/scan.",
         )
+
+
+def process_in_background(session_id: str, warung_id: str):
+    """
+    Background worker stub:
+    Dispatches agent execution loop (e.g. process_event) and sends replies
+    via Meta WhatsApp Cloud API (send_text) or Twilio REST API.
+    """
+    logger.info(f"Triggered background agent processing for session={session_id}, warung={warung_id}")
+    # STUB: nanti diganti process_event(...) dari agen Bagas
