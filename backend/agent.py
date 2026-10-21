@@ -25,6 +25,69 @@ class KawalHalalAgent:
         else:
             self.client = None
 
+    @property
+    def mode(self) -> str:
+        return "live" if (self.use_real_api and self.client) else "mock"
+
+    def analisis_gambar_label(self, image_bytes: bytes, mime_type: str = "image/jpeg") -> Dict[str, Any]:
+        """OCR + analisis titik kritis kehalalan dari foto label komposisi."""
+        if not (self.use_real_api and self.client):
+            bahan = ["gula", "tepung terigu", "E471", "gelatin", "karmin", "perisa vanila"]
+            return {
+                "mode": "mock",
+                "hasil_analisis": (
+                    "[SIMULASI] Komposisi terbaca: " + ", ".join(bahan) + ". "
+                    "GEMINI_API_KEY belum diset, gambar tidak dianalisis sungguhan."
+                ),
+                "data_titik_kritis": analisis_titik_kritis(bahan),
+            }
+
+        prompt = (
+            "Kamu adalah pakar kehalalan pangan KawalHalal. Analisis foto label makanan ini:\n"
+            "a. Lakukan OCR: baca seluruh teks komposisi/ingredients pada foto.\n"
+            "b. Deteksi bahan titik kritis/syubhat (E-numbers, gelatin, emulsifier, perisa, alkohol, dll.).\n"
+            "c. Berikan rekomendasi kehalalan berdasarkan fatwa MUI/BPJPH.\n"
+            "Balas HANYA JSON dengan kunci: \"teks_komposisi\" (string), "
+            "\"bahan_terdeteksi\" (array string), "
+            "\"bahan_kritis\" (array objek {\"bahan\",\"alasan\"}), \"rekomendasi\" (string). "
+            "Jika gambar bukan label komposisi, kosongkan array dan jelaskan di \"rekomendasi\"."
+        )
+        try:
+            import json
+
+            res = self.client.models.generate_content(
+                model=self.model_name,
+                contents=[
+                    self.types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
+                    prompt,
+                ],
+                config=self.types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    temperature=0.2,
+                ),
+            )
+            teks = res.text or ""
+            try:
+                parsed = json.loads(teks)
+            except json.JSONDecodeError:
+                return {"mode": "live", "hasil_analisis": teks, "data_titik_kritis": None}
+            if isinstance(parsed, list):
+                parsed = parsed[0] if parsed and isinstance(parsed[0], dict) else {}
+            bahan = [str(b) for b in parsed.get("bahan_terdeteksi", [])]
+            return {
+                "mode": "live",
+                "hasil_analisis": parsed,
+                "data_titik_kritis": analisis_titik_kritis(bahan),
+            }
+        except Exception as e:
+            print(f"[Gemini Vision Error]: {e}")
+            return {
+                "mode": "live",
+                "hasil_analisis": None,
+                "data_titik_kritis": None,
+                "error": f"Gagal menganalisis gambar ({type(e).__name__}): {e}",
+            }
+
     def proses_pertanyaan(self, prompt: str) -> Dict[str, Any]:
         # 1. LIVE GEMINI MODE (Menggunakan Chat Session + AFC sesuai rekomendasi SDK)
         if self.use_real_api and self.client:

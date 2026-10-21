@@ -3,7 +3,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from fastapi import FastAPI
+from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -38,6 +39,29 @@ def health():
 @app.post("/api/chat")
 def chat(req: ChatRequest):
     return agent.proses_pertanyaan(req.message)
+
+
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
+
+
+@app.post("/api/scan")
+async def scan(file: UploadFile = File(...)):
+    if file.content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(
+            status_code=415,
+            detail="Tipe file tidak didukung. Gunakan image/jpeg, image/png, atau image/webp.",
+        )
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="File kosong.")
+    hasil = await run_in_threadpool(agent.analisis_gambar_label, data, file.content_type)
+    return {
+        "mode": hasil["mode"],
+        "filename": file.filename,
+        "hasil_analisis": hasil.get("hasil_analisis"),
+        "data_titik_kritis": hasil.get("data_titik_kritis"),
+        **({"error": hasil["error"]} if "error" in hasil else {}),
+    }
 
 
 @app.post("/api/verify")
