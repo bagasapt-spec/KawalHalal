@@ -35,7 +35,7 @@ def verify_signature(raw_body: bytes, signature_header: Optional[str]) -> bool:
     """
     config = get_meta_config()
     app_secret = config["app_secret"]
-    if not app_secret:
+    if not app_secret or app_secret == "your-meta-app-secret-optional":
         return True
 
     if not signature_header or not signature_header.startswith("sha256="):

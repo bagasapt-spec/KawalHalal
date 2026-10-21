@@ -9,6 +9,7 @@ import httpx
 
 from agent import process_in_background
 import db
+from routers.dev_ingest import router as dev_router
 from routers.meta_webhook import router as meta_router
 from services.storage import upload_media
 
@@ -30,8 +31,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Register Meta WhatsApp Cloud API router
+# Register Webhook & Dev routers
 app.include_router(meta_router)
+app.include_router(dev_router)
 
 
 def twiml_response(text: Optional[str] = None) -> Response:
