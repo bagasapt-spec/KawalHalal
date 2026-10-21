@@ -2,8 +2,6 @@ import logging
 import mimetypes
 from typing import Optional
 
-from db import supabase
-
 logger = logging.getLogger("kawalhalal.storage")
 
 MIME_EXTENSION_MAP = {
@@ -42,6 +40,9 @@ def upload_media(content: bytes, content_type: str, message_id: str) -> str:
     Upload media bytes to Supabase Storage 'media' bucket at path 'whatsapp/{message_id}.{ext}'.
     Uses upsert and returns the public URL.
     """
+    from db import require_supabase  # lazy import: avoids circular import with db
+
+    supabase = require_supabase()
     ext = get_extension(content_type)
     file_path = f"whatsapp/{message_id}.{ext}"
 

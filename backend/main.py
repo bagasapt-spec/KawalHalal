@@ -231,7 +231,10 @@ def get_sihalal_dossier(wa_number: str):
     Mock SIHALAL Dossier Endpoint:
     Returns structured summary of warung profile, session state, P3H approvals, and approved ingredients.
     """
-    dossier = db.get_dossier_by_wa_number(wa_number)
+    try:
+        dossier = db.get_dossier_by_wa_number(wa_number)
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
     if not dossier:
         raise HTTPException(
             status_code=404,
