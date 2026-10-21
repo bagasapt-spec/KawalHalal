@@ -11,6 +11,7 @@ from agent import process_in_background
 import db
 from routers.dev_ingest import router as dev_router
 from routers.meta_webhook import router as meta_router
+from routers.mockup import router as mockup_router
 from services.storage import upload_media
 
 load_dotenv()
@@ -31,9 +32,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Register Webhook & Dev routers
+# Register Webhook, Dev & Mockup routers
 app.include_router(meta_router)
 app.include_router(dev_router)
+app.include_router(mockup_router)
 
 
 def twiml_response(text: Optional[str] = None) -> Response:
