@@ -1,0 +1,290 @@
+[
+  {
+    "id": "pj-1",
+    "nomorDaftar": null,
+    "jalur": "self-declare",
+    "jenisLayanan": "baru",
+    "status": "draf",
+    "namaUsaha": "Bakso Pak Sam",
+    "dibuat": "2026-10-21T13:55:00+07:00",
+    "diperbarui": "2026-10-21T14:31:00+07:00",
+    "data": {
+      "nomorSurat": "001/BPS/X/2026",
+      "tanggalSurat": "2026-10-21",
+      "jenisProduk": "Makanan",
+      "merek": "Bakso Pak Sam",
+      "areaPemasaran": "kabupaten-kota",
+      "jenisPendaftaran": "fasilitasi",
+      "kodeFasilitasi": "SEHATI-2026",
+      "pendampingPph": "Siti Rahmawati",
+      "pabrikIds": ["pb-1"],
+      "outletIds": ["ot-1"],
+      "penyeliaIds": ["py-1"],
+      "sumberField": {
+        "jenisProduk": { "oleh": "kawalhalal", "ref": "wa-msg-02", "waktu": "2026-10-21T13:57:00+07:00", "keyakinan": 0.96, "catatan": "Dari jawaban jenis usaha" },
+        "merek": { "oleh": "kawalhalal", "ref": "wa-msg-02", "waktu": "2026-10-21T13:57:00+07:00", "keyakinan": 0.92, "catatan": "Dari nama usaha di chat" },
+        "areaPemasaran": { "oleh": "kawalhalal", "ref": "wa-msg-03", "waktu": "2026-10-21T13:58:00+07:00", "keyakinan": 0.88, "catatan": "Pembeli hanya di sekitar warung" },
+        "jenisPendaftaran": { "oleh": "kawalhalal", "ref": "wa-msg-03", "waktu": "2026-10-21T13:58:00+07:00", "keyakinan": 0.9, "catatan": "Usaha mikro, kemungkinan jalur SEHATI" }
+      }
+    },
+    "komitmen": {
+      "kebijakanHalal": { "disetujuiPada": "2026-10-21T14:01:00+07:00", "sumber": { "oleh": "pengguna", "ref": "wa-msg-05", "waktu": "2026-10-21T14:01:00+07:00", "catatan": "Membalas SETUJU di WhatsApp" } },
+      "pengertianHalalHaram": { "disetujuiPada": "2026-10-21T14:01:00+07:00", "sumber": { "oleh": "pengguna", "ref": "wa-msg-05", "waktu": "2026-10-21T14:01:00+07:00", "catatan": "Membalas SETUJU di WhatsApp" } },
+      "praktikSjph": { "disetujuiPada": "2026-10-21T14:01:00+07:00", "sumber": { "oleh": "pengguna", "ref": "wa-msg-05", "waktu": "2026-10-21T14:01:00+07:00", "catatan": "Membalas SETUJU di WhatsApp" } },
+      "anggota": [
+        { "id": "ak-1", "nama": "Samsul Hadi", "jabatan": "Pemilik usaha", "posisi": "ketua", "sumber": { "oleh": "kawalhalal", "ref": "wa-msg-06", "waktu": "2026-10-21T14:03:00+07:00", "keyakinan": 0.97 } },
+        { "id": "ak-2", "nama": "Dewi Lestari", "jabatan": "Juru masak", "posisi": "anggota", "sumber": { "oleh": "kawalhalal", "ref": "wa-msg-06", "waktu": "2026-10-21T14:03:00+07:00", "keyakinan": 0.9 } }
+      ]
+    },
+    "bahan": {
+      "daftarBahan": [
+        {
+          "id": "b-1", "tipe": "bersertifikat", "jenis": "bahan", "nama": "Daging sapi segar",
+          "produsen": "RPH Kota Bandung (contoh)", "noSertifikat": "ID32110000100010923",
+          "bukti": "ada", "alasanBukti": "Nota RPH terunggah dan nama pemasok cocok.", "konfirmasi": "terkonfirmasi",
+          "fotoSumber": { "nama": "nota-rph.jpg" },
+          "sumber": { "oleh": "kawalhalal", "ref": "wa-msg-08", "waktu": "2026-10-21T14:10:00+07:00", "keyakinan": 0.94, "catatan": "Dibaca dari nota pembelian" }
+        },
+        {
+          "id": "b-2", "tipe": "bersertifikat", "jenis": "bahan", "nama": "Tepung tapioka",
+          "produsen": "PT Tapioka Nusantara (contoh)", "noSertifikat": "ID00410000033210521",
+          "bukti": "ada", "alasanBukti": "Foto label terbaca jelas.", "konfirmasi": "terkonfirmasi",
+          "fotoSumber": { "nama": "label-tapioka.jpg" },
+          "sumber": { "oleh": "kawalhalal", "ref": "wa-msg-09", "waktu": "2026-10-21T14:12:00+07:00", "keyakinan": 0.97, "catatan": "Dibaca dari foto label" }
+        },
+        {
+          "id": "b-3", "tipe": "bersertifikat", "jenis": "bahan", "nama": "Garam beryodium",
+          "produsen": "PT Garam Sejahtera (contoh)", "noSertifikat": "ID00410000045670122",
+          "bukti": "ada", "alasanBukti": "Foto label terbaca jelas.", "konfirmasi": "terkonfirmasi",
+          "fotoSumber": { "nama": "label-garam.jpg" },
+          "sumber": { "oleh": "kawalhalal", "ref": "wa-msg-09", "waktu": "2026-10-21T14:12:00+07:00", "keyakinan": 0.95, "catatan": "Dibaca dari foto label" }
+        },
+        {
+          "id": "b-4", "tipe": "bersertifikat", "jenis": "bahan", "nama": "Merica bubuk",
+          "produsen": "CV Rempah Jaya (contoh)", "noSertifikat": "ID32110000078900323",
+          "bukti": "tidak-jelas", "alasanBukti": "Nomor sertifikat di foto terpotong. Kirim ulang foto label bagian belakang.", "konfirmasi": "perlu-konfirmasi",
+          "fotoSumber": { "nama": "label-merica.jpg" },
+          "sumber": { "oleh": "kawalhalal", "ref": "wa-msg-10", "waktu": "2026-10-21T14:14:00+07:00", "keyakinan": 0.61, "catatan": "Foto buram di bagian nomor" }
+        },
+        {
+          "id": "b-5", "tipe": "tidak-bersertifikat", "jenis": "bahan", "nama": "Bawang putih",
+          "bukti": "ada", "alasanBukti": "Bahan nabati segar, nota pasar terunggah.", "konfirmasi": "terkonfirmasi",
+          "fotoSumber": { "nama": "nota-pasar.jpg" },
+          "sumber": { "oleh": "kawalhalal", "ref": "wa-msg-11", "waktu": "2026-10-21T14:16:00+07:00", "keyakinan": 0.9, "catatan": "Dibaca dari nota pasar" }
+        },
+        {
+          "id": "b-6", "tipe": "tidak-bersertifikat", "jenis": "bahan", "nama": "Penyedap rasa",
+          "bukti": "kurang", "alasanBukti": "Merek dan nomor sertifikat belum diketahui. Kirim foto kemasan penyedap.", "konfirmasi": "perlu-konfirmasi",
+          "sumber": { "oleh": "kawalhalal", "ref": "wa-msg-12", "waktu": "2026-10-21T14:20:00+07:00", "keyakinan": 0.72, "catatan": "Disebut di pesan suara" }
+        },
+        {
+          "id": "b-7", "tipe": "bersertifikat", "jenis": "bahan", "nama": "Minyak goreng sawit",
+          "produsen": "PT Sawit Makmur (contoh)", "noSertifikat": "ID00410000098760224",
+          "bukti": "ada", "alasanBukti": "Foto label terbaca jelas.", "konfirmasi": "terkonfirmasi",
+          "fotoSumber": { "nama": "label-minyak.jpg" },
+          "sumber": { "oleh": "kawalhalal", "ref": "wa-msg-09", "waktu": "2026-10-21T14:12:00+07:00", "keyakinan": 0.93, "catatan": "Dibaca dari foto label" }
+        },
+        {
+          "id": "b-8", "tipe": "tidak-bersertifikat", "jenis": "kemasan", "nama": "Plastik kemasan bening",
+          "bukti": "ada", "alasanBukti": "Kemasan plastik, foto terunggah.", "konfirmasi": "terkonfirmasi",
+          "fotoSumber": { "nama": "foto-plastik.jpg" },
+          "sumber": { "oleh": "kawalhalal", "ref": "wa-msg-13", "waktu": "2026-10-21T14:22:00+07:00", "keyakinan": 0.89, "catatan": "Dibaca dari foto kemasan" }
+        }
+      ],
+      "catatanPembelian": [
+        { "id": "cp-1", "bahanId": "b-1", "jumlah": 10, "satuan": "kg", "tanggal": "2026-10-19", "berkas": { "nama": "nota-rph.jpg" }, "sumber": { "oleh": "kawalhalal", "ref": "wa-msg-08", "waktu": "2026-10-21T14:10:00+07:00", "keyakinan": 0.94 } },
+        { "id": "cp-2", "bahanId": "b-2", "jumlah": 5, "satuan": "kg", "tanggal": "2026-10-18", "sumber": { "oleh": "kawalhalal", "ref": "wa-msg-11", "waktu": "2026-10-21T14:16:00+07:00", "keyakinan": 0.86 } },
+        { "id": "cp-3", "bahanId": "b-3", "jumlah": 1, "satuan": "kg", "tanggal": "2026-10-18", "sumber": { "oleh": "kawalhalal", "ref": "wa-msg-11", "waktu": "2026-10-21T14:16:00+07:00", "keyakinan": 0.86 } },
+        { "id": "cp-4", "bahanId": "b-4", "jumlah": 250, "satuan": "gram", "tanggal": "2026-10-18", "sumber": { "oleh": "kawalhalal", "ref": "wa-msg-11", "waktu": "2026-10-21T14:16:00+07:00", "keyakinan": 0.8 } },
+        { "id": "cp-5", "bahanId": "b-5", "jumlah": 1, "satuan": "kg", "tanggal": "2026-10-19", "berkas": { "nama": "nota-pasar.jpg" }, "sumber": { "oleh": "kawalhalal", "ref": "wa-msg-11", "waktu": "2026-10-21T14:16:00+07:00", "keyakinan": 0.9 } },
+        { "id": "cp-6", "bahanId": "b-7", "jumlah": 2, "satuan": "liter", "tanggal": "2026-10-18", "sumber": { "oleh": "kawalhalal", "ref": "wa-msg-11", "waktu": "2026-10-21T14:16:00+07:00", "keyakinan": 0.84 } }
+      ],
+      "pemeriksaan": [
+        { "id": "pm-1", "bahanId": "b-1", "lokasi": "Dapur Bakso Pak Sam", "tanggal": "2026-10-19", "sumber": { "oleh": "kawalhalal", "ref": "wa-msg-08", "waktu": "2026-10-21T14:10:00+07:00", "keyakinan": 0.9 } },
+        { "id": "pm-2", "bahanId": "b-2", "lokasi": "Dapur Bakso Pak Sam", "tanggal": "2026-10-18", "sumber": { "oleh": "kawalhalal", "ref": "wa-msg-09", "waktu": "2026-10-21T14:12:00+07:00", "keyakinan": 0.9 } }
+      ]
+    },
+    "produk": [
+      {
+        "id": "pr-1", "klasifikasi": "Makanan", "rincian": "Produk olahan daging", "nama": "Bakso Sapi Halus", "merek": "Bakso Pak Sam",
+        "foto": { "nama": "bakso-halus.jpg" }, "bahanIds": ["b-1", "b-2", "b-3", "b-4", "b-5", "b-6", "b-8"],
+        "sumber": { "oleh": "kawalhalal", "ref": "wa-msg-04", "waktu": "2026-10-21T14:00:00+07:00", "keyakinan": 0.95, "catatan": "Dari daftar menu di chat" }
+      },
+      {
+        "id": "pr-2", "klasifikasi": "Makanan", "rincian": "Produk olahan daging", "nama": "Bakso Sapi Urat", "merek": "Bakso Pak Sam",
+        "foto": { "nama": "bakso-urat.jpg" }, "bahanIds": ["b-1", "b-2", "b-3", "b-4", "b-5", "b-6", "b-7", "b-8"],
+        "sumber": { "oleh": "kawalhalal", "ref": "wa-msg-04", "waktu": "2026-10-21T14:00:00+07:00", "keyakinan": 0.95, "catatan": "Dari daftar menu di chat" }
+      }
+    ],
+    "proses": {
+      "pernyataanBebasBabi": { "disetujuiPada": "2026-10-21T14:01:00+07:00", "sumber": { "oleh": "pengguna", "ref": "wa-msg-05", "waktu": "2026-10-21T14:01:00+07:00", "catatan": "Membalas SETUJU di WhatsApp" } },
+      "layout": [
+        { "id": "lp-1", "pabrikId": "pb-1", "berkas": { "nama": "denah-dapur.jpg" }, "sumber": { "oleh": "kawalhalal", "ref": "wa-msg-14", "waktu": "2026-10-21T14:25:00+07:00", "catatan": "Foto dapur dari WhatsApp" } }
+      ],
+      "penyimpanan": [
+        { "id": "ps-1", "jenis": "bahan", "refId": "b-1", "jumlah": 10, "tanggalMasuk": "2026-10-19", "tanggalKeluar": "2026-10-20", "sumber": { "oleh": "kawalhalal", "ref": "wa-msg-12", "waktu": "2026-10-21T14:20:00+07:00", "keyakinan": 0.7, "catatan": "Disusun dari pesan suara" } },
+        { "id": "ps-2", "jenis": "produk", "refId": "pr-1", "jumlah": 200, "tanggalMasuk": "2026-10-20", "sumber": { "oleh": "kawalhalal", "ref": "wa-msg-12", "waktu": "2026-10-21T14:20:00+07:00", "keyakinan": 0.7, "catatan": "Disusun dari pesan suara" } }
+      ],
+      "alurProses": [
+        {
+          "id": "ap-1",
+          "judul": "Pembuatan bakso sapi",
+          "langkah": [
+            "Daging sapi dicuci lalu digiling bersama es batu",
+            "Adonan dicampur tapioka, bawang putih, garam, merica, dan penyedap",
+            "Adonan dibentuk bulat lalu direbus dalam air mendidih",
+            "Bakso ditiriskan dan didinginkan",
+            "Bakso disimpan di freezer atau langsung disajikan dengan kuah"
+          ],
+          "sumber": { "oleh": "kawalhalal", "ref": "wa-msg-12", "waktu": "2026-10-21T14:20:00+07:00", "keyakinan": 0.83, "catatan": "Disusun dari pesan suara" }
+        }
+      ],
+      "hasilProduksi": [
+        { "id": "hp-1", "produkId": "pr-1", "jumlah": 300, "tanggalProduksi": "2026-10-20", "tanggalKedaluwarsa": "2026-10-27", "sumber": { "oleh": "kawalhalal", "ref": "wa-msg-12", "waktu": "2026-10-21T14:20:00+07:00", "keyakinan": 0.75 } }
+      ],
+      "distribusi": []
+    },
+    "pemetaan": [
+      { "id": "pp-1", "produkId": "pr-1", "pabrikId": "pb-1" },
+      { "id": "pp-2", "produkId": "pr-2", "pabrikId": "pb-1" }
+    ],
+    "pemantauan": {
+      "dokumenLain": [],
+      "tandaTangan": []
+    },
+    "riwayat": [
+      { "status": "draf", "waktu": "2026-10-21T13:55:00+07:00", "catatan": "Draf dibuat oleh KawalHalal dari percakapan WhatsApp" }
+    ],
+    "audit": [
+      { "id": "au-1", "waktu": "2026-10-21T13:55:00+07:00", "pelaku": "kawalhalal", "aksi": "Membuat draf pengajuan Self Declare", "ref": "wa-msg-01" },
+      { "id": "au-2", "waktu": "2026-10-21T13:58:00+07:00", "pelaku": "kawalhalal", "aksi": "Mengisi data pengajuan dari profil usaha", "bagian": "data", "ref": "wa-msg-03" },
+      { "id": "au-3", "waktu": "2026-10-21T14:01:00+07:00", "pelaku": "pengguna", "aksi": "Menyetujui pernyataan komitmen dan bebas babi lewat WhatsApp", "bagian": "komitmen", "ref": "wa-msg-05" },
+      { "id": "au-4", "waktu": "2026-10-21T14:16:00+07:00", "pelaku": "kawalhalal", "aksi": "Menambahkan 8 bahan dari foto label dan nota", "bagian": "bahan", "ref": "wa-msg-11" },
+      { "id": "au-5", "waktu": "2026-10-21T14:20:00+07:00", "pelaku": "kawalhalal", "aksi": "Menyusun alur proses dari pesan suara", "bagian": "proses", "ref": "wa-msg-12" },
+      { "id": "au-6", "waktu": "2026-10-21T14:31:00+07:00", "pelaku": "pengguna", "aksi": "Mengonfirmasi daftar bahan, membalas YA", "bagian": "bahan", "ref": "wa-msg-15" }
+    ]
+  },
+  {
+    "id": "pj-2",
+    "nomorDaftar": "SH2026-1-000142",
+    "jalur": "self-declare",
+    "jenisLayanan": "pengembangan",
+    "status": "verifikasi-pendamping",
+    "namaUsaha": "Bakso Pak Sam",
+    "dibuat": "2026-10-14T09:12:00+07:00",
+    "diperbarui": "2026-10-16T10:05:00+07:00",
+    "data": {
+      "nomorSurat": "002/BPS/X/2026",
+      "tanggalSurat": "2026-10-14",
+      "jenisProduk": "Minuman",
+      "merek": "Bakso Pak Sam",
+      "areaPemasaran": "kabupaten-kota",
+      "jenisPendaftaran": "fasilitasi",
+      "kodeFasilitasi": "SEHATI-2026",
+      "pendampingPph": "Siti Rahmawati",
+      "pabrikIds": ["pb-1"],
+      "outletIds": ["ot-1"],
+      "penyeliaIds": ["py-1"],
+      "sumberField": {}
+    },
+    "komitmen": {
+      "kebijakanHalal": { "disetujuiPada": "2026-10-14T09:20:00+07:00" },
+      "pengertianHalalHaram": { "disetujuiPada": "2026-10-14T09:20:00+07:00" },
+      "praktikSjph": { "disetujuiPada": "2026-10-14T09:20:00+07:00" },
+      "anggota": [
+        { "id": "ak-3", "nama": "Samsul Hadi", "jabatan": "Pemilik usaha", "posisi": "ketua" }
+      ]
+    },
+    "bahan": {
+      "daftarBahan": [
+        { "id": "b-21", "tipe": "bersertifikat", "jenis": "bahan", "nama": "Teh hitam celup", "produsen": "PT Kebun Teh (contoh)", "noSertifikat": "ID00410000011220321", "bukti": "ada", "konfirmasi": "terkonfirmasi" },
+        { "id": "b-22", "tipe": "bersertifikat", "jenis": "bahan", "nama": "Gula pasir", "produsen": "PT Gula Manis (contoh)", "noSertifikat": "ID00410000022330421", "bukti": "ada", "konfirmasi": "terkonfirmasi" },
+        { "id": "b-23", "tipe": "tidak-bersertifikat", "jenis": "kemasan", "nama": "Gelas plastik", "bukti": "ada", "konfirmasi": "terkonfirmasi" }
+      ],
+      "catatanPembelian": [
+        { "id": "cp-21", "bahanId": "b-21", "jumlah": 2, "satuan": "kotak", "tanggal": "2026-10-12" },
+        { "id": "cp-22", "bahanId": "b-22", "jumlah": 5, "satuan": "kg", "tanggal": "2026-10-12" },
+        { "id": "cp-23", "bahanId": "b-23", "jumlah": 100, "satuan": "pcs", "tanggal": "2026-10-12" }
+      ],
+      "pemeriksaan": [
+        { "id": "pm-21", "bahanId": "b-21", "lokasi": "Dapur Bakso Pak Sam", "tanggal": "2026-10-12" },
+        { "id": "pm-22", "bahanId": "b-22", "lokasi": "Dapur Bakso Pak Sam", "tanggal": "2026-10-12" },
+        { "id": "pm-23", "bahanId": "b-23", "lokasi": "Dapur Bakso Pak Sam", "tanggal": "2026-10-12" }
+      ]
+    },
+    "produk": [
+      { "id": "pr-21", "klasifikasi": "Minuman", "rincian": "Minuman berbasis teh", "nama": "Es Teh Manis", "merek": "Bakso Pak Sam", "bahanIds": ["b-21", "b-22", "b-23"] }
+    ],
+    "proses": {
+      "pernyataanBebasBabi": { "disetujuiPada": "2026-10-14T09:20:00+07:00" },
+      "layout": [{ "id": "lp-21", "pabrikId": "pb-1", "berkas": { "nama": "denah-dapur.jpg" } }],
+      "penyimpanan": [{ "id": "ps-21", "jenis": "bahan", "refId": "b-21", "jumlah": 2, "tanggalMasuk": "2026-10-12" }],
+      "alurProses": [
+        { "id": "ap-21", "judul": "Pembuatan es teh manis", "langkah": ["Teh diseduh dengan air panas", "Gula dilarutkan", "Teh didinginkan lalu disajikan dengan es batu"] }
+      ],
+      "hasilProduksi": [{ "id": "hp-21", "produkId": "pr-21", "jumlah": 50, "tanggalProduksi": "2026-10-13" }],
+      "distribusi": [{ "id": "ds-21", "produkId": "pr-21", "jumlah": 50, "tanggal": "2026-10-13", "tujuan": "Dijual langsung di warung" }]
+    },
+    "pemetaan": [{ "id": "pp-21", "produkId": "pr-21", "pabrikId": "pb-1" }],
+    "pemantauan": {
+      "dokumenLain": [],
+      "tandaTangan": [
+        { "id": "tt-21", "penanggungJawab": { "nama": "ttd-samsul.png" }, "penyeliaId": "py-1", "penyelia": { "nama": "ttd-samsul.png" } }
+      ]
+    },
+    "riwayat": [
+      { "status": "draf", "waktu": "2026-10-14T09:12:00+07:00" },
+      { "status": "terkirim", "waktu": "2026-10-15T16:40:00+07:00", "catatan": "Dikirim oleh pelaku usaha" },
+      { "status": "verifikasi-pendamping", "waktu": "2026-10-16T10:05:00+07:00", "catatan": "Diterima Pendamping PPH Siti Rahmawati" }
+    ],
+    "audit": [
+      { "id": "au-21", "waktu": "2026-10-14T09:12:00+07:00", "pelaku": "pengguna", "aksi": "Membuat draf pengajuan Self Declare" },
+      { "id": "au-22", "waktu": "2026-10-15T16:40:00+07:00", "pelaku": "pengguna", "aksi": "Mengirim pengajuan" },
+      { "id": "au-23", "waktu": "2026-10-16T10:05:00+07:00", "pelaku": "pendamping", "aksi": "Memulai verifikasi dan validasi" }
+    ]
+  },
+  {
+    "id": "pj-3",
+    "nomorDaftar": null,
+    "jalur": "self-declare",
+    "jenisLayanan": "baru",
+    "status": "draf",
+    "namaUsaha": "Bakso Pak Sam",
+    "dibuat": "2026-10-21T15:10:00+07:00",
+    "diperbarui": "2026-10-21T15:10:00+07:00",
+    "data": {
+      "nomorSurat": "",
+      "tanggalSurat": "",
+      "jenisProduk": "",
+      "merek": "",
+      "areaPemasaran": "kabupaten-kota",
+      "jenisPendaftaran": "mandiri",
+      "pabrikIds": [],
+      "outletIds": [],
+      "penyeliaIds": [],
+      "sumberField": {}
+    },
+    "komitmen": {
+      "kebijakanHalal": null,
+      "pengertianHalalHaram": null,
+      "praktikSjph": null,
+      "anggota": []
+    },
+    "bahan": { "daftarBahan": [], "catatanPembelian": [], "pemeriksaan": [] },
+    "produk": [],
+    "proses": {
+      "pernyataanBebasBabi": null,
+      "layout": [],
+      "penyimpanan": [],
+      "alurProses": [],
+      "hasilProduksi": [],
+      "distribusi": []
+    },
+    "pemetaan": [],
+    "pemantauan": { "dokumenLain": [], "tandaTangan": [] },
+    "riwayat": [{ "status": "draf", "waktu": "2026-10-21T15:10:00+07:00" }],
+    "audit": [
+      { "id": "au-31", "waktu": "2026-10-21T15:10:00+07:00", "pelaku": "pengguna", "aksi": "Membuat draf pengajuan Self Declare" }
+    ]
+  }
+]

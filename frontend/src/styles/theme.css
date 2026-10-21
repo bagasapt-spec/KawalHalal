@@ -1,0 +1,85 @@
+@import "tailwindcss";
+@import "@fontsource-variable/plus-jakarta-sans";
+
+/*
+ * Token mengikuti KawalHalal-Design-System.pdf (tipografi, spasi, sudut, status).
+ * Warna merek sementara memakai ungu SIHALAL; ganti nilai di sini saja, jangan tulis hex di komponen.
+ */
+@theme {
+  --font-sans: "Plus Jakarta Sans Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Consolas, monospace;
+
+  /* Permukaan dan teks */
+  --color-surface: #f7f6f9;
+  --color-surface-raised: #ffffff;
+  --color-ink: #1f1a24;
+  --color-ink-muted: #5f5a66;
+  --color-line: #e6e1ea;
+  --color-line-strong: #7a7383;
+
+  /* Merek (ungu SIHALAL) */
+  --color-brand: #5f0f72;
+  --color-on-brand: #ffffff;
+  --color-brand-deep: #3b0a47;
+  --color-on-deep: #ffffff;
+  --color-brand-tint: #f9eefc;
+  --color-focus: #5f0f72;
+
+  /* Status (nilai dari design system) */
+  --color-status-ok: #1e5c38;
+  --color-status-ok-bg: #e3f1e8;
+  --color-status-info: #1f4f8c;
+  --color-status-info-bg: #e1ecf8;
+  --color-status-warn: #7a4e00;
+  --color-status-warn-bg: #fbebcb;
+  --color-status-risk: #8f2a20;
+  --color-status-risk-bg: #f8deda;
+
+  /* Spasi: kelipatan 4px, jadi p-4 = space-4 (16px) */
+  --spacing: 4px;
+
+  /* Sudut */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+
+  /* Skala teks */
+  --text-h1: 32px;
+  --text-h1--line-height: 38px;
+  --text-h1--font-weight: 800;
+  --text-h2: 24px;
+  --text-h2--line-height: 30px;
+  --text-h2--font-weight: 700;
+  --text-h3: 18px;
+  --text-h3--line-height: 24px;
+  --text-h3--font-weight: 700;
+  --text-body: 16px;
+  --text-body--line-height: 24px;
+  --text-body-sm: 14px;
+  --text-body-sm--line-height: 20px;
+  --text-label: 13px;
+  --text-label--line-height: 16px;
+  --text-label--font-weight: 600;
+  --text-caption: 12px;
+  --text-caption--line-height: 16px;
+  --text-caption--font-weight: 500;
+  --text-mono: 13px;
+  --text-mono--line-height: 20px;
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    color: var(--color-ink);
+    background: var(--color-surface);
+  }
+  body {
+    font-size: var(--text-body);
+    line-height: var(--text-body--line-height);
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+}
