@@ -90,3 +90,28 @@ INGREDIENT_ALIASES = {
     "shellac": "e904",
     "lard": "lemak babi",
 }
+
+# Registri mock RPH (ruminansia: sapi/kambing) dan RPU (unggas: ayam/bebek) bersertifikat halal (BR-04, BR-13)
+MOCK_RPH_RPU = {
+    "ID3174000100001": {
+        "nama": "RPH Cakung Halal",
+        "tipe": "RPH",
+        "hewan": ["sapi", "kambing"],
+        "status": "Berlaku",
+        "tanggal_kadaluarsa": "2028-02-01",
+    },
+    "ID3175000200002": {
+        "nama": "RPU Sumber Unggas Halal",
+        "tipe": "RPU",
+        "hewan": ["ayam", "bebek"],
+        "status": "Berlaku",
+        "tanggal_kadaluarsa": "2027-11-20",
+    },
+    "ID3175000200003": {
+        "nama": "RPU Mitra Ayam Sejahtera",
+        "tipe": "RPU",
+        "hewan": ["ayam"],
+        "status": "Kadaluarsa",
+        "tanggal_kadaluarsa": "2024-06-30",
+    },
+}
