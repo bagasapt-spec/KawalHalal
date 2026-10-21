@@ -1,14 +1,16 @@
 import logging
 import os
 from typing import Optional
-from xml.sax.saxutils import escape
 
 from dotenv import load_dotenv
 from fastapi import BackgroundTasks, FastAPI, Form, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 import httpx
 
+from agent import process_in_background
 import db
+from routers.meta_webhook import router as meta_router
+from services.storage import upload_media
 
 load_dotenv()
 
@@ -28,21 +30,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Register Meta WhatsApp Cloud API router
+app.include_router(meta_router)
+
 
 def twiml_response(text: Optional[str] = None) -> Response:
-    """Return TwiML XML response. If text is None or empty, returns an empty <Response></Response>."""
-    if text:
-        content = f"<Message>{escape(text)}</Message>"
-    else:
-        content = ""
-    xml = f'<?xml version="1.0" encoding="UTF-8"?><Response>{content}</Response>'
-    return Response(content=xml, media_type="application/xml")
-
-
-def process_in_background(session_id: str, warung_id: str):
-    # STUB: nanti diganti process_event(...) dari agen Bagas
-    # lalu balasan dikirim lewat Twilio REST API
-    pass
+    """Return valid TwiML XML response."""
+    return Response(content="<Response></Response>", media_type="application/xml")
 
 
 @app.post("/api/webhook/whatsapp")
@@ -55,49 +49,84 @@ async def whatsapp_webhook(
     MediaUrl0: Optional[str] = Form(None),
     MediaContentType0: Optional[str] = Form(None),
 ):
-    wa_number = From.replace("whatsapp:", "")
-    warung = db.get_or_create_warung(wa_number)
-    session = db.get_or_create_session(warung["id"])
+    """
+    Twilio WhatsApp Webhook:
+    Receives incoming WhatsApp messages from Twilio Sandbox.
+    Handles text and media fallback gracefully and always returns a valid XML TwiML response.
+    """
+    try:
+        wa_number = From.replace("whatsapp:", "")
+        warung = db.get_or_create_warung(wa_number)
+        session = db.get_or_create_session(warung["id"])
 
-    # Handle incoming media (download via httpx with Twilio HTTP Basic Auth & upload raw bytes to Supabase Storage)
-    media_url_to_save: Optional[str] = None
-    if NumMedia > 0 and MediaUrl0:
-        try:
-            async with httpx.AsyncClient(follow_redirects=True) as client:
-                media_resp = await client.get(
-                    MediaUrl0,
-                    auth=(os.environ["TWILIO_ACCOUNT_SID"], os.environ["TWILIO_AUTH_TOKEN"]),
-                )
-                if media_resp.status_code == 200:
-                    content_type = MediaContentType0 or media_resp.headers.get("content-type")
-                    media_url_to_save = db.upload_media(media_resp.content, content_type)
-                elif media_resp.status_code == 401:
+        media_url_to_save: Optional[str] = None
+        media_status: Optional[str] = None
+
+        if NumMedia > 0:
+            if MediaUrl0:
+                try:
+                    twilio_auth = (
+                        (os.environ.get("TWILIO_ACCOUNT_SID", "").strip(), os.environ.get("TWILIO_AUTH_TOKEN", "").strip())
+                        if os.environ.get("TWILIO_ACCOUNT_SID") and os.environ.get("TWILIO_AUTH_TOKEN")
+                        else None
+                    )
+                    async with httpx.AsyncClient(follow_redirects=True, timeout=10.0) as client:
+                        media_resp = await client.get(
+                            MediaUrl0,
+                            auth=twilio_auth,
+                        )
+                        if media_resp.status_code == 200:
+                            content_type = MediaContentType0 or media_resp.headers.get("content-type", "image/jpeg")
+                            media_url_to_save = upload_media(
+                                content=media_resp.content,
+                                content_type=content_type,
+                                message_id=MessageSid,
+                            )
+                            media_status = "ok"
+                        elif media_resp.status_code == 401:
+                            logger.error(
+                                f"Twilio Auth Failed (401) for MessageSid {MessageSid}: {MediaUrl0}"
+                            )
+                            media_url_to_save = None
+                            media_status = "failed"
+                        else:
+                            logger.error(
+                                f"Twilio media download failed for MessageSid {MessageSid} with status {media_resp.status_code}: {MediaUrl0}"
+                            )
+                            media_url_to_save = None
+                            media_status = "failed"
+                except Exception as media_err:
                     logger.error(
-                        f"Twilio Auth Failed: Check SID and Token ({media_resp.status_code}): {MediaUrl0}"
+                        f"Exception during Twilio media download for MessageSid {MessageSid}: {media_err}"
                     )
-                    media_url_to_save = MediaUrl0
-                else:
-                    logger.warning(
-                        f"Failed to fetch media from Twilio ({media_resp.status_code}): {MediaUrl0}"
-                    )
-                    media_url_to_save = MediaUrl0
-        except Exception as e:
-            logger.error(f"Error downloading/uploading media: {e}")
-            media_url_to_save = MediaUrl0
+                    media_url_to_save = None
+                    media_status = "failed"
+            else:
+                logger.error(f"NumMedia > 0 but MediaUrl0 is missing for MessageSid {MessageSid}")
+                media_url_to_save = None
+                media_status = "failed"
+        else:
+            media_status = None
 
-    db.save_message(
-        session["id"],
-        "in",
-        Body,
-        media_url_to_save,
-        MediaContentType0 if NumMedia > 0 else None,
-        MessageSid,
-    )
+        # Save message to Supabase (preserves existing text & adds media_status)
+        db.save_message(
+            session_id=session["id"],
+            direction="in",
+            body=Body,
+            media_url=media_url_to_save,
+            media_type=MediaContentType0 if NumMedia > 0 else None,
+            twilio_sid=MessageSid,
+            media_status=media_status,
+        )
 
-    background_tasks.add_task(process_in_background, session["id"], warung["id"])
+        # Trigger background agent loop
+        background_tasks.add_task(process_in_background, session["id"], warung["id"])
 
-    # Return empty TwiML response; outgoing agent responses are dispatched asynchronously via Twilio REST API
-    return twiml_response()
+    except Exception as err:
+        logger.error(f"Error handling Twilio webhook: {err}", exc_info=True)
+
+    # Always return HTTP 200 with valid TwiML on all paths, never raise error 12300 to Twilio
+    return Response(content="<Response></Response>", media_type="application/xml")
 
 
 @app.get("/api/dossier/{wa_number}")
