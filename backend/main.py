@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from agent import KawalHalalAgent
+from sihalal_mock import router as sihalal_router
 from tools import cek_sertifikat_bpjph
 
 app = FastAPI(title="KawalHalal API")
@@ -19,6 +20,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(sihalal_router)
 
 agent = KawalHalalAgent()
 
