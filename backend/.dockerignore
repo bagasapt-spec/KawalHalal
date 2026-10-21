@@ -1,0 +1,13 @@
+venv/
+.venv/
+__pycache__/
+*.pyc
+.env
+.env.*
+.git/
+.gitignore
+.dockerignore
+Dockerfile
+_uji/
+*.log
+.pytest_cache/
