@@ -20,12 +20,14 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 WIB = timezone(timedelta(hours=7))
-FIXTURES_DIR = Path(
-    os.getenv(
-        "SIHALAL_FIXTURES_DIR",
-        Path(__file__).resolve().parent.parent / "frontend" / "src" / "mocks" / "fixtures",
-    )
-)
+# Urutan: env var -> salinan lokal backend/fixtures (dipakai di container, build context = backend/)
+# -> fixture frontend (dev lokal dari monorepo).
+_BACKEND_DIR = Path(__file__).resolve().parent
+_LOCAL_FIXTURES = _BACKEND_DIR / "fixtures"
+_FRONTEND_FIXTURES = _BACKEND_DIR.parent / "frontend" / "src" / "mocks" / "fixtures"
+
+_DEFAULT_FIXTURES_DIR = _LOCAL_FIXTURES if (_LOCAL_FIXTURES / "pelaku-usaha.json").exists() else _FRONTEND_FIXTURES
+FIXTURES_DIR = Path(os.getenv("SIHALAL_FIXTURES_DIR", str(_DEFAULT_FIXTURES_DIR)))
 
 BAGIAN = ("data", "komitmen", "bahan", "produk", "proses", "pemetaan", "pemantauan")
 BAGIAN_LIST = {"produk", "pemetaan"}
@@ -70,9 +72,21 @@ def _id(awalan: str) -> str:
 def muat_seed() -> None:
     """Kembalikan data ke isi fixture (dipakai saat start dan reset demo)."""
     global _pelaku_usaha, _pengajuan, _nomor_berikutnya
-    with open(FIXTURES_DIR / "pelaku-usaha.json", encoding="utf-8") as f:
+    pelaku_file = FIXTURES_DIR / "pelaku-usaha.json"
+    pengajuan_file = FIXTURES_DIR / "pengajuan.json"
+
+    # Fallback aman jika path FIXTURES_DIR tidak memuat file
+    if not pelaku_file.exists() or not pengajuan_file.exists():
+        if (_LOCAL_FIXTURES / "pelaku-usaha.json").exists() and (_LOCAL_FIXTURES / "pengajuan.json").exists():
+            pelaku_file = _LOCAL_FIXTURES / "pelaku-usaha.json"
+            pengajuan_file = _LOCAL_FIXTURES / "pengajuan.json"
+        elif (_FRONTEND_FIXTURES / "pelaku-usaha.json").exists() and (_FRONTEND_FIXTURES / "pengajuan.json").exists():
+            pelaku_file = _FRONTEND_FIXTURES / "pelaku-usaha.json"
+            pengajuan_file = _FRONTEND_FIXTURES / "pengajuan.json"
+
+    with open(pelaku_file, encoding="utf-8") as f:
         _pelaku_usaha = json.load(f)
-    with open(FIXTURES_DIR / "pengajuan.json", encoding="utf-8") as f:
+    with open(pengajuan_file, encoding="utf-8") as f:
         _pengajuan = json.load(f)
     _nomor_berikutnya = 143
 

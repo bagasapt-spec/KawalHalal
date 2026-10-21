@@ -1,0 +1,56 @@
+{
+  "id": "pu-1",
+  "namaUsaha": "Bakso Pak Sam",
+  "nib": "9120001234567",
+  "skala": "mikro",
+  "alamat": "Jl. Cisitu Lama No. 12",
+  "provinsi": "Jawa Barat",
+  "kabKota": "Kota Bandung",
+  "kodePos": "40135",
+  "penanggungJawab": {
+    "nama": "Samsul Hadi",
+    "noHp": "081234567890",
+    "email": "samsul.bakso@example.com"
+  },
+  "aspekLegal": [
+    {
+      "id": "al-1",
+      "jenis": "NIB",
+      "nomor": "9120001234567",
+      "tanggal": "2024-07-14",
+      "instansiPenerbit": "OSS (BKPM)"
+    }
+  ],
+  "pabrik": [
+    {
+      "id": "pb-1",
+      "nama": "Dapur Bakso Pak Sam",
+      "alamat": "Jl. Cisitu Lama No. 12",
+      "provinsi": "Jawa Barat",
+      "kabKota": "Kota Bandung",
+      "kodePos": "40135",
+      "status": "milik-sendiri"
+    }
+  ],
+  "outlet": [
+    {
+      "id": "ot-1",
+      "nama": "Warung Bakso Pak Sam",
+      "alamat": "Jl. Cisitu Lama No. 12",
+      "provinsi": "Jawa Barat",
+      "kabKota": "Kota Bandung",
+      "kodePos": "40135"
+    }
+  ],
+  "penyeliaHalal": [
+    {
+      "id": "py-1",
+      "nama": "Samsul Hadi",
+      "noKtp": "3273010101800001",
+      "agama": "Islam",
+      "noSk": "SK/01/BPS/X/2026",
+      "tanggalSk": "2026-10-21",
+      "berkasKtp": { "nama": "ktp-samsul.jpg" }
+    }
+  ]
+}

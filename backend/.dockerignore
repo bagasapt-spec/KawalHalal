@@ -1,13 +1,28 @@
+# Environments & virtualenvs
+venv
 venv/
+.venv
 .venv/
+env/
+
+# Python bytecode & cache
+__pycache__
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Environment files & secrets
 .env
 .env.*
+
+# Git repository & config
+.git
 .git/
 .gitignore
+
+# Docker & logs
 .dockerignore
 Dockerfile
 _uji/
 *.log
-.pytest_cache/
