@@ -99,6 +99,8 @@ MOCK_RPH_RPU = {
         "hewan": ["sapi", "kambing"],
         "status": "Berlaku",
         "tanggal_kadaluarsa": "2028-02-01",
+        "lokasi": "Bandung, Jawa Barat",
+        "alamat": "Jl. Ciroyom Barat No. 12, Kota Bandung, Jawa Barat",
     },
     "ID3175000200002": {
         "nama": "RPU Sumber Unggas Halal",
@@ -106,6 +108,8 @@ MOCK_RPH_RPU = {
         "hewan": ["ayam", "bebek"],
         "status": "Berlaku",
         "tanggal_kadaluarsa": "2027-11-20",
+        "lokasi": "Bandung, Jawa Barat",
+        "alamat": "Jl. Soekarno Hatta No. 210, Kota Bandung, Jawa Barat",
     },
     "ID3175000200003": {
         "nama": "RPU Mitra Ayam Sejahtera",
@@ -113,5 +117,25 @@ MOCK_RPH_RPU = {
         "hewan": ["ayam"],
         "status": "Kadaluarsa",
         "tanggal_kadaluarsa": "2024-06-30",
+        "lokasi": "Pasar Kosambi, Bandung, Jawa Barat",
+        "alamat": "Jl. Ahmad Yani No. 15, Kota Bandung, Jawa Barat",
+    },
+    "ID3273000300004": {
+        "nama": "RPU Berkah Unggas Parahyangan",
+        "tipe": "RPU",
+        "hewan": ["ayam", "bebek"],
+        "status": "Berlaku",
+        "tanggal_kadaluarsa": "2028-05-15",
+        "lokasi": "Bandung, Jawa Barat",
+        "alamat": "Jl. Kopo Bihbul No. 88, Kabupaten Bandung, Jawa Barat",
+    },
+    "ID3273000300005": {
+        "nama": "RPH Ciroyom Kota Bandung",
+        "tipe": "RPH",
+        "hewan": ["sapi", "kambing"],
+        "status": "Berlaku",
+        "tanggal_kadaluarsa": "2028-09-30",
+        "lokasi": "Ciroyom, Bandung, Jawa Barat",
+        "alamat": "Jl. Arjuna No. 45, Ciroyom, Kota Bandung, Jawa Barat",
     },
 }

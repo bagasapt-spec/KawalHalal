@@ -8,7 +8,7 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, BackgroundTasks, Header, Query, Request, Response
 import httpx
 
-from agent import process_in_background
+from kawal_agent.agent import process_in_background
 import db
 from services.storage import upload_media
 

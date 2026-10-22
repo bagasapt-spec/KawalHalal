@@ -17,7 +17,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
 
 import sihalal_mock as sm  # noqa: E402
 from kawal_agent.agent import agen_aktif, di_loop_agen, hapus_sesi, jalankan, lihat_state  # noqa: E402

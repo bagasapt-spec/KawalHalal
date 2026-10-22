@@ -1,27 +1,28 @@
-﻿"""FastAPI app KawalHalal."""
+"""FastAPI app KawalHalal."""
+from dotenv import load_dotenv
+
+load_dotenv(override=True)
+
 import logging
 import os
 import httpx
-from dotenv import load_dotenv
 
-load_dotenv()
+from typing import Any, Dict, List, Literal, Optional
 
-from typing import List, Literal, Optional
-
-from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Response, UploadFile
+from fastapi import BackgroundTasks, Body, FastAPI, File, Form, HTTPException, Response, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from agent import CATATAN_DISCLAIMER, KawalHalalAgent, process_in_background
 import db
+from kawal_agent.agent import CATATAN_DISCLAIMER, KawalHalalAgent, process_in_background
+from kawal_agent.tools import TOOL_REGISTRY, cek_sertifikat_bpjph
 from routers.agent_chat import router as agent_router
 from routers.dev_ingest import router as dev_router
 from routers.meta_webhook import router as meta_router
 from routers.mockup import router as mockup_router
 from services.storage import upload_media
-from sihalal_mock import router as sihalal_router
-from tools import cek_sertifikat_bpjph
+from sihalal_mock import TOOLS_SIHALAL, router as sihalal_router
 
 TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
@@ -47,7 +48,10 @@ agent = KawalHalalAgent()
 
 
 class ChatRequest(BaseModel):
-    message: str
+    session_id: str = Field(default="sesi-umkm-001", description="ID sesi percakapan UMKM")
+    pesan: str = Field(default="", description="Pesan teks dari pelaku usaha UMKM")
+    berkas: Optional[str] = Field(default=None, description="Opsional: path atau nama berkas lampiran (nota/label/denah)")
+    message: Optional[str] = Field(default=None, exclude=True, description="Alias kompatibilitas mundur untuk pesan")
 
 
 class VerifyRequest(BaseModel):
@@ -78,9 +82,33 @@ def health():
     return {"status": "ok", "service": "KawalHalal", "mode": agent.mode}
 
 
+@app.post("/api/demo/agen/{nama_tool}")
+def jalankan_tool_agen_demo(nama_tool: str, args: Dict[str, Any] = Body(default={})):
+    """Eksekusi langsung tool dari TOOL_REGISTRY (backend/tools.py) maupun TOOLS_SIHALAL lewat Swagger UI."""
+    daftar_tool = {**{f.__name__: f for f in TOOLS_SIHALAL}, **TOOL_REGISTRY}
+    fn = daftar_tool.get(nama_tool)
+    if fn is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Tool {nama_tool} tidak ada. Pilihan: {', '.join(daftar_tool.keys())}.",
+        )
+    try:
+        return fn(**(args or {}))
+    except TypeError as e:
+        raise HTTPException(status_code=422, detail=f"Argumen tool tidak sesuai: {e}")
+
+
 @app.post("/api/chat")
 def chat(req: ChatRequest):
-    return agent.proses_pertanyaan(req.message)
+    """Jalankan percakapan KawalHalalAgent dan kembalikan balasan agen beserta status tool yang dipicu."""
+    teks = (req.pesan if req.pesan else (req.message or "")).strip()
+    if not teks and not req.berkas:
+        raise HTTPException(status_code=422, detail="Field 'pesan' atau 'berkas' tidak boleh kosong.")
+    return agent.proses_pertanyaan(
+        prompt=teks,
+        session_id=req.session_id,
+        berkas=req.berkas,
+    )
 
 
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}

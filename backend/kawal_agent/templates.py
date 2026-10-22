@@ -130,15 +130,32 @@ def _kosong(v: Any) -> bool:
     return v is None or str(v).strip() == "" or str(v).strip().upper() == BELUM_DIISI
 
 
-def buat_xlsx(dok: dict, kategori: Optional[str], pelaku: dict, tujuan: Path) -> dict:
+def buat_xlsx(
+    dok: dict,
+    kategori: Optional[str],
+    pelaku: dict,
+    tujuan: Path,
+    komitmen: Optional[dict] = None,
+    anggota: Optional[list] = None,
+) -> dict:
     wb = Workbook()
     petunjuk = wb.active
     petunjuk.title = "Petunjuk"
+    pj = (pelaku or {}).get("penanggungJawab") or {}
+    daftar_anggota = list(anggota or (komitmen or {}).get("anggota") or [])
+    teks_tim = (
+        ", ".join(f"{a.get('nama', '-')} ({a.get('jabatan', '-')}/{a.get('posisi', '-')})" for a in daftar_anggota)
+        if daftar_anggota
+        else BELUM_DIISI
+    )
     baris_petunjuk = [
-        ("Berkas Persiapan Pengajuan Sertifikasi Halal", True),
+        ("Berkas Persiapan & Draf Sistem Jaminan Produk Halal (SJPH)", True),
         (f"Usaha: {pelaku.get('namaUsaha', '-')}", False),
+        (f"Penanggung Jawab: {pj.get('nama') or BELUM_DIISI} ({pj.get('noHp') or '-'})", False),
         (f"NIB: {pelaku.get('nib') or BELUM_DIISI}", False),
+        (f"Alamat: {pelaku.get('alamat') or BELUM_DIISI}, {pelaku.get('kabKota') or ''}", False),
         (f"Kategori: {kategori or BELUM_DIISI}", False),
+        (f"Tim Manajemen Halal: {teks_tim}", False),
         ("", False),
         ("Sel berwarna kuning bertuliskan BELUM DIISI berarti data itu belum Anda berikan. Lengkapi lewat KawalHalal atau isi langsung di berkas ini.", False),
         ("Berkas ini disusun dari data yang Anda berikan. KawalHalal tidak menetapkan kehalalan dan tidak menandatangani apa pun atas nama Anda.", False),
@@ -175,6 +192,30 @@ def buat_xlsx(dok: dict, kategori: Optional[str], pelaku: dict, tujuan: Path) ->
                     continue
                 ws.cell(row=i, column=j, value=nilai).alignment = Alignment(wrap_text=True, vertical="top")
         ws.freeze_panes = "A2"
+
+    # Sheet tambahan Ringkasan Komitmen & Tim Halal SJPH
+    ws_sjph = wb.create_sheet(title="Manual SJPH")
+    for j, judul_kol in enumerate(("Komponen SJPH", "Isian / Status", "Keterangan"), start=1):
+        c = ws_sjph.cell(row=1, column=j, value=judul_kol)
+        c.font = Font(bold=True, color="FFFFFF")
+        c.fill = header_fill
+        ws_sjph.column_dimensions[get_column_letter(j)].width = 38
+    ringkasan_baris = [
+        ("Nama Usaha", pelaku.get("namaUsaha") or BELUM_DIISI, f"NIB: {pelaku.get('nib') or BELUM_DIISI}"),
+        ("Tim Manajemen Halal", teks_tim, f"{len(daftar_anggota)} anggota tercatat"),
+        ("Daftar Produk", f"{len(dok.get('produk', []))} produk", ", ".join(x.get("nama", "") for x in dok.get("produk", [])) or BELUM_DIISI),
+        ("Daftar Bahan", f"{len(dok.get('bahan', []))} bahan", ", ".join(x.get("nama", "") for x in dok.get("bahan", [])) or BELUM_DIISI),
+        ("Catatan Pembelian & Pemeriksaan", f"{len(dok.get('pembelian', []))} catatan", "Bukti belanja dan pemeriksaan bahan"),
+        ("Alur Proses Produksi", f"{len(dok.get('proses', []))} alur", "; ".join(x.get("judul", "") for x in dok.get("proses", [])) or BELUM_DIISI),
+        ("Penyimpanan", f"{len(dok.get('penyimpanan', []))} catatan", "Pencatatan penyimpanan bahan & produk"),
+        ("Hasil Produksi", f"{len(dok.get('hasil', []))} catatan", "Pencatatan hasil produksi"),
+        ("Distribusi", f"{len(dok.get('distribusi', []))} catatan", "Pencatatan distribusi produk"),
+    ]
+    for idx, (komp, isi_k, ket_k) in enumerate(ringkasan_baris, start=2):
+        ws_sjph.cell(row=idx, column=1, value=komp)
+        ws_sjph.cell(row=idx, column=2, value=isi_k)
+        ws_sjph.cell(row=idx, column=3, value=ket_k)
+
     tujuan.parent.mkdir(parents=True, exist_ok=True)
     wb.save(tujuan)
     return {"sel_belum_diisi": jumlah_kosong, "bagian_kosong": bagian_kosong(dok, kategori)}

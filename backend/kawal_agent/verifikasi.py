@@ -9,7 +9,7 @@ verdict:
 import re
 from typing import Optional
 
-from tools import bedah_titik_kritis, cek_bukti_hewan_sembelihan
+from .tools import bedah_titik_kritis, cek_bukti_hewan_sembelihan
 
 from . import registri
 

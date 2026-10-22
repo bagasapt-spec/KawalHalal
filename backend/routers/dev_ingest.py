@@ -6,7 +6,7 @@ from typing import Optional
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Header, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse
 
-from agent import process_in_background
+from kawal_agent.agent import process_in_background
 import db
 from services.storage import upload_media
 

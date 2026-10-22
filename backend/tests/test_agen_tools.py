@@ -370,9 +370,8 @@ def test_lampirkan_berkas_fallback_cli_tanpa_upload():
 
 
 def test_eskalasi_ke_pendamping_p3h_dan_audio():
-    import agent as legacy_agent
-    import tools as legacy_tools
-    from kawal_agent import agent as adk_agent
+    from kawal_agent import agent as adk_agent, tools as legacy_tools
+    legacy_agent = adk_agent
 
     c = siapkan_draf(Ctx().giliran("halo"))
     esc = T.eskalasi_ke_pendamping_p3h("Gelatin Sapi", "Belum ada sertifikat halal BPJPH", "kritis_hewani", c)
@@ -399,3 +398,99 @@ def test_eskalasi_ke_pendamping_p3h_dan_audio():
     )
     assert len(meta) == 1 and meta[0]["mime"] == "audio/ogg"
     assert len(bagian_media) == 1
+
+
+
+@pytest.fixture(autouse=True)
+def mock_db_offline(monkeypatch):
+    monkeypatch.setitem(
+        sys.modules,
+        "db",
+        SimpleNamespace(
+            supabase=None,
+            require_supabase=lambda: (_ for _ in ()).throw(RuntimeError("mock db offline")),
+        ),
+    )
+
+
+def test_cari_rpu_halal_terdekat_dan_registrasi():
+    from kawal_agent import agent as legacy_agent, tools as legacy_tools
+
+    assert "cari_rpu_halal_terdekat" in legacy_agent.TOOL_REGISTRY
+    assert "cari_rpu_halal_terdekat" in legacy_agent.SYSTEM_INSTRUCTION
+
+    r_unggas = legacy_tools.cari_rpu_halal_terdekat("Bandung", "unggas")
+    assert r_unggas["status"] == "ok"
+    assert r_unggas["google_maps_url"] == "https://www.google.com/maps/search/?api=1&query=RPU+Halal+Bandung"
+    assert len(r_unggas["rekomendasi"]) >= 1
+    assert all(x["status_sertifikasi"] == "Berlaku" for x in r_unggas["rekomendasi"])
+
+    r_sapi = T.cari_rpu_halal_terdekat("Pasar Ciroyom Bandung", "sapi")
+    assert r_sapi["status"] == "ok"
+    assert "https://www.google.com/maps/search/?api=1&query=RPU+Halal+Pasar+Ciroyom+Bandung" in r_sapi["google_maps_url"]
+    assert any(x["tipe"] == "RPH" for x in r_sapi["rekomendasi"])
+
+
+def test_validasi_kelayakan_sihalal_reflection_critic():
+    from kawal_agent import agent as legacy_agent, tools as legacy_tools
+
+    assert "validasi_kelayakan_sihalal" in legacy_agent.TOOL_REGISTRY
+
+    c = siapkan_draf(Ctx().giliran("mulai"))
+    # Sebelum dilengkapi: harus mendeteksi celah pada 4 alur produksi, bahan hewani, dan tim halal
+    cek_awal = legacy_tools.validasi_kelayakan_sihalal(c.state["pengajuan_id"])
+    assert cek_awal["layak_submit"] is False
+    assert "alur_produksi" in cek_awal["bagian_kurang"]
+    assert "verifikasi_bahan_hewani" in cek_awal["bagian_kurang"]
+    assert "tim_halal" in cek_awal["bagian_kurang"]
+
+    # Setelah seluruh data, 4 alur produksi, bahan hewani, tim halal, dan komitmen dilengkapi
+    lengkapi_semua(c)
+    setujui_pernyataan(c)
+    cek_akhir = T.validasi_kelayakan_sihalal(c.state["pengajuan_id"], c)
+    assert cek_akhir["layak_submit"] is True
+    assert cek_akhir["audit_internal"]["alur_produksi_4_tahap"]["lengkap"] is True
+    assert cek_akhir["audit_internal"]["verifikasi_bahan_hewani"]["lengkap"] is True
+    assert cek_akhir["audit_internal"]["data_tim_halal"]["lengkap"] is True
+
+
+def test_pindai_nota_atau_label_vision_ocr():
+    from kawal_agent import agent as legacy_agent, tools as legacy_tools
+
+    assert "pindai_nota_atau_label" in legacy_agent.TOOL_REGISTRY
+
+    h1 = legacy_tools.pindai_nota_atau_label("nota_kecap.jpg")
+    assert h1["status"] == "ok"
+    assert h1["nama_bahan"] == "Kecap Manis"
+    assert h1["merk"] == "Kecap Cap Layar"
+    assert h1["nomor_sh_pirt"] == "ID1230000100101"
+    assert h1["tanggal"]
+
+    c = siapkan_draf(Ctx().giliran("halo"))
+    h2 = T.pindai_nota_atau_label("bon_ayam_rpu.jpg", c)
+    assert h2["status"] == "ok"
+    assert "Ayam" in h2["nama_bahan"]
+    assert h2["nomor_sh_pirt"] == "ID3175000200002"
+
+
+def test_ekspor_berkas_sjph_siap_unduh():
+    from pathlib import Path
+    from openpyxl import load_workbook
+    from kawal_agent import agent as legacy_agent
+
+    assert "ekspor_berkas_sjph" in legacy_agent.TOOL_REGISTRY
+
+    c = siapkan_draf(Ctx().giliran("mulai"))
+    lengkapi_semua(c)
+    setujui_pernyataan(c)
+
+    h = T.ekspor_berkas_sjph(c)
+    assert h["status"] == "dibuat"
+    assert h["url"] and "?t=" in h["url"]
+    assert h["ringkasan_sjph"]["jumlah_produk"] >= 1
+    assert h["ringkasan_sjph"]["jumlah_bahan"] >= 3
+    path_xlsx = Path(h["file_path"])
+    assert path_xlsx.is_file()
+    wb = load_workbook(path_xlsx)
+    assert "Manual SJPH" in wb.sheetnames
+    assert Path(h["file_path_sjph"]).is_file()

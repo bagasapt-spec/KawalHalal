@@ -53,7 +53,7 @@ LABEL_TAB = {
     "pemantauan": "Pemantauan dan Evaluasi",
 }
 
-_kunci = threading.Lock()
+_kunci = threading.RLock()
 _pelaku_usaha: dict = {}
 _pengajuan: list[dict] = []
 _nomor_berikutnya = 143
@@ -470,7 +470,7 @@ def _manual_sjph(p: dict, pu: dict) -> str:
     )
     return f"""<!doctype html><html lang="id"><meta charset="utf-8"><title>Manual SJPH</title>{_GAYA}
 <h1>Manual Sistem Jaminan Produk Halal</h1>
-<p>{escape(pu['namaUsaha'])} · NIB {escape(pu['nib'])}</p>
+<p>{escape(pu['namaUsaha'])} Â· NIB {escape(pu['nib'])}</p>
 <h2>1. Komitmen dan tanggung jawab</h2><table><tr><th>Nama</th><th>Jabatan</th><th>Posisi</th></tr>{anggota}</table>
 <h2>2. Bahan</h2><table><tr><th>Nama bahan</th><th>Produsen</th><th>No. sertifikat halal</th></tr>{bahan}</table>
 <h2>3. Proses produk halal</h2>{alur or '<p>-</p>'}
@@ -656,13 +656,16 @@ def isi_sihalal_tambah_produk(
 TOOLS_SIHALAL = [isi_sihalal_buat_draf, isi_sihalal_data, isi_sihalal_tambah_bahan, isi_sihalal_tambah_produk]
 
 
-@router.post("/api/demo/agen/{nama_tool}")
+@router.post("/api/demo/agen/{nama_tool}", include_in_schema=False)
 def jalankan_tool_agen(nama_tool: str, args: dict = Body(default={})):
     """Jalankan tool agen lewat HTTP untuk latihan demo dan pengujian, tanpa lewat Gemini."""
-    fn = {f.__name__: f for f in TOOLS_SIHALAL}.get(nama_tool)
+    from kawal_agent.tools import TOOL_REGISTRY
+
+    daftar_tool = {**{f.__name__: f for f in TOOLS_SIHALAL}, **TOOL_REGISTRY}
+    fn = daftar_tool.get(nama_tool)
     if fn is None:
-        raise HTTPException(404, f"Tool {nama_tool} tidak ada. Pilihan: {', '.join(f.__name__ for f in TOOLS_SIHALAL)}.")
+        raise HTTPException(404, f"Tool {nama_tool} tidak ada. Pilihan: {', '.join(daftar_tool.keys())}.")
     try:
-        return fn(**args)
+        return fn(**(args or {}))
     except TypeError as e:
         raise HTTPException(422, f"Argumen tool tidak sesuai: {e}")
