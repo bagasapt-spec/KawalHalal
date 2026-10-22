@@ -25,9 +25,13 @@ from .tools import SEMUA_TOOL, _slug_user, folder_pengguna, url_berkas
 logger = logging.getLogger("kawalhalal.agen")
 
 APP_NAME = "kawalhalal"
-MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
+MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
 BATAS_TEKS_DOKUMEN = 8000
 MIME_VISI = {"image/jpeg", "image/png", "image/webp", "application/pdf"}
+MIME_AUDIO = {
+    "audio/ogg", "audio/opus", "audio/mpeg", "audio/mp3", "audio/mp4",
+    "audio/aac", "audio/amr", "audio/wav", "audio/x-wav", "audio/webm", "audio/flac",
+}
 DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
@@ -100,8 +104,14 @@ async def di_loop_agen(coro):
     return await asyncio.wrap_future(asyncio.run_coroutine_threadsafe(coro, _ambil_loop_agen()))
 
 
-async def jalankan_di_loop_agen(user_id: str, teks: str, lampiran: Optional[list[dict]] = None) -> dict:
-    return await di_loop_agen(jalankan(user_id, teks, lampiran))
+async def jalankan_di_loop_agen(
+    user_id: str,
+    teks: str,
+    lampiran: Optional[list[dict]] = None,
+    audio_bytes: Optional[bytes] = None,
+    audio_mime: str = "audio/ogg",
+) -> dict:
+    return await di_loop_agen(jalankan(user_id, teks, lampiran, audio_bytes=audio_bytes, audio_mime=audio_mime))
 
 
 def ganti_model(model) -> None:
@@ -112,7 +122,12 @@ def ganti_model(model) -> None:
 
 
 def agen_aktif() -> bool:
-    return bool(os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or os.getenv("GOOGLE_GENAI_USE_VERTEXAI"))
+    return bool(
+        os.getenv("GEMINI_API_KEY")
+        or os.getenv("GOOGLE_API_KEY")
+        or os.getenv("GOOGLE_GENAI_USE_VERTEXAI")
+        or os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+    )
 
 
 def _nama_aman(nama: str) -> str:
@@ -146,6 +161,13 @@ def siapkan_lampiran(user_id: str, lampiran: list[dict]) -> tuple[list[dict], li
         if mime in MIME_VISI:
             parts.append(types.Part.from_text(text=catatan + " Isinya terlampir sebagai gambar/dokumen."))
             parts.append(types.Part.from_bytes(data=data, mime_type=mime))
+        elif mime in MIME_AUDIO or mime.startswith("audio/"):
+            parts.append(
+                types.Part.from_text(
+                    text=catatan + " Ini adalah pesan suara (voice note) dari pengguna. Dengarkan dan proses isinya sebagai instruksi atau jawaban pengguna."
+                )
+            )
+            parts.append(types.Part.from_bytes(data=data, mime_type=mime))
         elif mime == DOCX_MIME or nama.lower().endswith(".docx"):
             try:
                 parts.append(types.Part.from_text(text=f"{catatan} Isi dokumen:\n{_teks_docx(data)}"))
@@ -158,7 +180,13 @@ def siapkan_lampiran(user_id: str, lampiran: list[dict]) -> tuple[list[dict], li
     return daftar, parts
 
 
-async def jalankan(user_id: str, teks: str, lampiran: Optional[list[dict]] = None) -> dict:
+async def jalankan(
+    user_id: str,
+    teks: str,
+    lampiran: Optional[list[dict]] = None,
+    audio_bytes: Optional[bytes] = None,
+    audio_mime: str = "audio/ogg",
+) -> dict:
     """Satu giliran percakapan. Giliran per pengguna diserialkan supaya state tidak balapan."""
     if not agen_aktif():
         return {"balasan": "Agen AI belum aktif: GEMINI_API_KEY (atau kredensial Vertex AI) belum diatur di server.", "alat": [], "aktif": False}
@@ -169,8 +197,12 @@ async def jalankan(user_id: str, teks: str, lampiran: Optional[list[dict]] = Non
             sesi = await _sessions.create_session(app_name=APP_NAME, user_id=user_id, session_id=sid, state={})
         parts = []
         delta = {}
-        if lampiran:
-            baru, parts_lampiran = siapkan_lampiran(user_id, lampiran)
+        daftar_lampiran = list(lampiran or [])
+        if audio_bytes:
+            ext = (audio_mime or "audio/ogg").split("/")[-1].split(";")[0] or "ogg"
+            daftar_lampiran.append({"nama": f"voicenote.{ext}", "mime": audio_mime or "audio/ogg", "data": audio_bytes})
+        if daftar_lampiran:
+            baru, parts_lampiran = siapkan_lampiran(user_id, daftar_lampiran)
             delta["berkas_masuk"] = (sesi.state.get("berkas_masuk") or []) + baru
             parts.extend(parts_lampiran)
         parts.insert(0, types.Part.from_text(text=teks or "(pengguna hanya mengirim lampiran)"))

@@ -13,6 +13,8 @@ logger = logging.getLogger("kawalhalal.wa_agent")
 _sudah_diproses: set[str] = set()  # webhook yang dikirim ulang provider tidak boleh dibalas dua kali
 MIME_DIDUKUNG = {
     "image/jpeg", "image/png", "image/webp", "application/pdf",
+    "audio/ogg", "audio/opus", "audio/mpeg", "audio/mp3", "audio/mp4",
+    "audio/aac", "audio/amr", "audio/wav", "audio/x-wav", "audio/webm", "audio/flac",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 }

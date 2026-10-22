@@ -192,6 +192,33 @@ async def process_single_meta_message(msg: Dict[str, Any]):
             media_url = None
             media_status = "failed"
 
+    elif msg_type in ("audio", "voice"):
+        aud_info = msg.get(msg_type, {}) or msg.get("audio", {})
+        media_id = aud_info.get("id")
+        body_text = aud_info.get("caption", "") or ""
+
+        if media_id:
+            raw_bytes, detected_mime = await _download_meta_media(media_id)
+            if raw_bytes:
+                try:
+                    media_type = (detected_mime or aud_info.get("mime_type", "audio/ogg")).split(";")[0].strip()
+                    media_url = upload_media(
+                        content=raw_bytes,
+                        content_type=media_type,
+                        message_id=msg_id,
+                    )
+                    media_status = "ok"
+                except Exception as e:
+                    logger.error(f"Failed to upload Meta audio to Supabase Storage: {e}")
+                    media_url = None
+                    media_status = "failed"
+            else:
+                media_url = None
+                media_status = "failed"
+        else:
+            media_url = None
+            media_status = "failed"
+
     else:
         # Handle audio, video, document, contacts, location, interactive, etc. gracefully
         payload_data = msg.get(msg_type, {})

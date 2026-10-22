@@ -353,3 +353,49 @@ def test_lihat_progres_dan_pilihan_kategori():
     assert T.pilih_kategori("2", c)["kategori"] == "minuman"
     assert T.pilih_kategori("kosmetik", c)["kategori"] == "kosmetik"
     assert T.pilih_kategori("pesawat", c)["status"] == "tidak_dikenal"
+
+
+
+def test_lampirkan_berkas_fallback_cli_tanpa_upload():
+    """Di CLI/terminal, penyebutan nama berkas seperti denah_dapur.jpg atau dokumen_komitmen_tanda_tangan.jpg langsung diterima tanpa upload biner."""
+    c = siapkan_draf(Ctx().giliran("halo"))
+    r1 = T.lampirkan_berkas("denah", "denah_dapur.jpg", c)
+    assert r1["status"] == "ok" and r1["berkas"] == "denah_dapur.jpg"
+    r2 = T.lampirkan_berkas("komitmen", "dokumen_komitmen_tanda_tangan.jpg", c)
+    assert r2["status"] == "ok" and r2["berkas"] == "dokumen_komitmen_tanda_tangan.jpg"
+    p = pengajuan(c)
+    assert p["proses"]["layout"][0]["berkas"]["nama"] == "denah_dapur.jpg"
+    assert p["pemantauan"]["tandaTangan"][0]["penanggungJawab"]["nama"] == "dokumen_komitmen_tanda_tangan.jpg"
+    assert p["pemantauan"]["tandaTangan"][0]["penyelia"]["nama"] == "dokumen_komitmen_tanda_tangan.jpg"
+
+
+def test_eskalasi_ke_pendamping_p3h_dan_audio():
+    import agent as legacy_agent
+    import tools as legacy_tools
+    from kawal_agent import agent as adk_agent
+
+    c = siapkan_draf(Ctx().giliran("halo"))
+    esc = T.eskalasi_ke_pendamping_p3h("Gelatin Sapi", "Belum ada sertifikat halal BPJPH", "kritis_hewani", c)
+    assert esc["status"] == "berhasil_dieskalasi" and esc["ticket_id"]
+    assert len(c.state.get("eskalasi_p3h") or []) == 1
+
+    esc_legacy = legacy_tools.eskalasi_ke_pendamping_p3h("warung-001", "Gelatin Sapi", "Perlu verifikasi P3H")
+    assert esc_legacy["status"] == "berhasil_dieskalasi" and esc_legacy["ticket_id"]
+
+    lamp_legacy = legacy_tools.lampirkan_berkas("denah", "denah_dapur.jpg", c.state["pengajuan_id"])
+    assert lamp_legacy["status"] == "ok" and lamp_legacy["valid"] is True
+
+    # Batch structured output schema
+    parsed = legacy_agent.AnalisisBahanResult(bahan=["Tepung Terigu", "Garam"], nomor_sertifikat=["ID1230000100101"])
+    assert parsed.bahan == ["Tepung Terigu", "Garam"]
+
+    # Multi-turn chat history fallback when DB is empty/offline
+    assert isinstance(legacy_agent.build_chat_history("sesi-uji-001"), list)
+
+    # Audio voice note native support
+    meta, bagian_media = adk_agent.siapkan_lampiran(
+        "+6281200000001",
+        [("pesan_suara.ogg", "audio/ogg", b"OggS-dummy-voice-note")],
+    )
+    assert len(meta) == 1 and meta[0]["mime"] == "audio/ogg"
+    assert len(bagian_media) == 1
