@@ -7,6 +7,7 @@ penyimpanan internal. Pekerjaan berjalan di latar belakang supaya Kala tetap mem
 Aktif bila KALA_OPERATOR=ui. Bagian yang belum punya rutinitas formulir (proses produksi, lampiran) tetap ditulis
 langsung oleh sinkron.sinkron setelah rutinitas formulir selesai.
 """
+import contextlib
 import copy
 import difflib
 import logging
@@ -42,6 +43,10 @@ CATATAN_SETUJU = "Disetujui pengguna lewat chat, diinput operator Kala"
 
 def aktif() -> bool:
     return os.environ.get("KALA_OPERATOR", "").strip().lower() in ("ui", "1", "true")
+
+
+def agen_aktif() -> bool:
+    return os.environ.get("KALA_OPERATOR_AGEN", "").strip().lower() in ("1", "true", "ya", "ui")
 
 
 def _base_url() -> str:
@@ -87,8 +92,31 @@ def _bahan_diinginkan(state: dict) -> list[dict]:
     return hasil
 
 
-def rencana(state: dict, live: dict) -> list[dict]:
+def _live_kosong() -> dict:
+    return {
+        "data": {"pabrikIds": []},
+        "bahan": {"daftarBahan": [], "catatanPembelian": [], "pemeriksaan": []},
+        "produk": [],
+        "pemetaan": [],
+        "komitmen": {"kebijakanHalal": None, "pengertianHalalHaram": None, "praktikSjph": None, "anggota": []},
+        "proses": {"pernyataanBebasBabi": None},
+    }
+
+
+def rencana(state: dict, live: dict | bool = True) -> list[dict]:
     """Daftar langkah formulir yang masih perlu dikerjakan supaya SIHALAL sesuai data percakapan. Idempoten."""
+    if not isinstance(live, dict):
+        pid = state.get("pengajuan_id")
+        if pid:
+            try:
+                import httpx
+
+                r = httpx.get(f"{_base_url()}/api/sihalal/pengajuan/{pid}", timeout=5.0)
+                live = r.json() if r.status_code == 200 else _live_kosong()
+            except Exception:
+                live = _live_kosong()
+        else:
+            live = _live_kosong()
     dok = state.get("dok") or {}
     kat = KATEGORI.get(state.get("kategori") or "", {})
     klasifikasi = kat.get("klasifikasi", "Makanan")
@@ -183,6 +211,11 @@ class _Layar:
         self.pg.get_by_role("tab", selected=True).wait_for()
         self.tab = tab
         self.catat(f"Membuka tab {tab}")
+
+    def lihat(self, tab: str = "") -> str:
+        target = (tab or "").strip() or self.tab or "bahan"
+        self.buka(target)
+        return self.pg.locator("body").inner_text()[:4000]
 
     def _tombol_tambah(self, judul_kartu: str = ""):
         if not judul_kartu:
@@ -294,13 +327,14 @@ class _Layar:
 
 # ---------------------------------------------------------------- pekerja latar belakang
 class _Pekerja:
-    def __init__(self, pelaksana=None):
+    def __init__(self, pelaksana=None, pembuat_layar=None):
         self._kunci = threading.Condition()
         self._menunggu: dict[str, dict] = {}   # pid -> pekerjaan terbaru (yang lama digantikan)
         self._berjalan: set[str] = set()
         self._riwayat: dict[str, deque] = {}
         self._thread: threading.Thread | None = None
         self._pelaksana = pelaksana or self._pelaksana_playwright
+        self._pembuat_layar = pembuat_layar
         self._browser = None
         self._pw = None
         self._henti = False
@@ -386,15 +420,34 @@ class _Pekerja:
         pid, state, ref = kerja["pid"], kerja["state"], kerja["ref"]
         mulai = time.time()
         username = (state.get("akun") or {}).get("username") or ""
-        for percobaan in (1, 2):
-            gagal = self._pelaksana(pid, state, ref, username)
-            if not gagal:
-                break
-            self._catat(pid, f"{len(gagal)} langkah belum berhasil (percobaan {percobaan})")
+        perlu_fallback = True
+        if agen_aktif():
+            try:
+                gagal_agen = self._pelaksana_agen(pid, state, ref, username)
+                if not gagal_agen:
+                    perlu_fallback = False
+                else:
+                    self._catat(
+                        pid,
+                        f"{len(gagal_agen)} langkah belum berhasil oleh agen, beralih ke pelaksana deterministik",
+                    )
+            except Exception as e:
+                logger.warning("Agen operator terkendala untuk %s (%s), fallback ke deterministik", pid, e)
+                self._catat(pid, f"Agen operator terkendala ({type(e).__name__}), beralih ke pelaksana deterministik")
+        if perlu_fallback:
+            for percobaan in (1, 2):
+                gagal = self._pelaksana(pid, state, ref, username)
+                if not gagal:
+                    break
+                self._catat(pid, f"{len(gagal)} langkah belum berhasil (percobaan {percobaan})")
         sk.sinkron(state, ref, lewati=BAGIAN_FORMULIR)
         self._catat(pid, f"Selesai dalam {time.time() - mulai:.1f} detik")
 
-    def _pelaksana_playwright(self, pid: str, state: dict, ref: str, username: str) -> list[dict]:
+    @contextlib.contextmanager
+    def _buka_layar(self, pid: str, username: str, ref: str):
+        if self._pembuat_layar is not None:
+            yield self._pembuat_layar(pid, username, ref)
+            return
         from playwright.sync_api import sync_playwright
 
         if self._browser is None:
@@ -405,9 +458,23 @@ class _Pekerja:
             "localStorage.setItem('kawalhalal-sesi', %r);"
             "window.__kalaOperator = { ref: %r, catatan: 'Diinput operator Kala lewat formulir' };" % (username or "operator", ref)
         )
-        gagal = []
         try:
-            layar = _Layar(ctx, pid, lambda teks: self._catat(pid, teks))
+            yield _Layar(ctx, pid, lambda teks: self._catat(pid, teks))
+        finally:
+            ctx.close()
+
+    def _pelaksana_agen(self, pid: str, state: dict, ref: str, username: str) -> list[dict]:
+        from . import agen_operator
+
+        with self._buka_layar(pid, username, ref) as layar:
+            if not rencana(state, layar.baca()):
+                return []
+            hasil = agen_operator.jalankan_sinkron(state, layar, pid=pid)
+            return hasil.get("gagal") or []
+
+    def _pelaksana_playwright(self, pid: str, state: dict, ref: str, username: str) -> list[dict]:
+        gagal = []
+        with self._buka_layar(pid, username, ref) as layar:
             for t in rencana(state, layar.baca()):
                 try:
                     layar.lakukan(t)
@@ -415,9 +482,8 @@ class _Pekerja:
                     self._catat(pid, f"Gagal pada {t['aksi']}: {str(e).splitlines()[0][:120]}")
                     gagal.append(t)
                     layar.tab = None
-                    layar.pg.keyboard.press("Escape")
-        finally:
-            ctx.close()
+                    if getattr(layar, "pg", None) is not None:
+                        layar.pg.keyboard.press("Escape")
         return gagal
 
 
