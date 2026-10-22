@@ -28,7 +28,7 @@ def token() -> str:
 
 def aktif() -> bool:
     # TELEGRAM_NONAKTIF=1: jalankan server lokal tanpa merebut polling dari bot yang hidup di Cloud Run
-    return bool(token()) and os.environ.get("TELEGRAM_NONAKTIF", "") not in ("1", "true")
+    return bool(token()) and os.environ.get("TELEGRAM_NONAKTIF", "").strip() not in ("1", "true")
 
 
 def ekstrak_update(upd: dict) -> Optional[dict]:
