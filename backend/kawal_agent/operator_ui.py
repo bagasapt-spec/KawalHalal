@@ -7,6 +7,7 @@ penyimpanan internal. Pekerjaan berjalan di latar belakang supaya Kala tetap mem
 Aktif bila KALA_OPERATOR=ui. Bagian yang belum punya rutinitas formulir (proses produksi, lampiran) tetap ditulis
 langsung oleh sinkron.sinkron setelah rutinitas formulir selesai.
 """
+import contextlib
 import copy
 import difflib
 import logging
@@ -42,6 +43,10 @@ CATATAN_SETUJU = "Disetujui pengguna lewat chat, diinput operator Kala"
 
 def aktif() -> bool:
     return os.environ.get("KALA_OPERATOR", "").strip().lower() in ("ui", "1", "true")
+
+
+def agen_aktif() -> bool:
+    return os.environ.get("KALA_OPERATOR_AGEN", "").strip().lower() in ("1", "true", "ya", "ui")
 
 
 def _base_url() -> str:
@@ -87,8 +92,31 @@ def _bahan_diinginkan(state: dict) -> list[dict]:
     return hasil
 
 
-def rencana(state: dict, live: dict) -> list[dict]:
+def _live_kosong() -> dict:
+    return {
+        "data": {"pabrikIds": []},
+        "bahan": {"daftarBahan": [], "catatanPembelian": [], "pemeriksaan": []},
+        "produk": [],
+        "pemetaan": [],
+        "komitmen": {"kebijakanHalal": None, "pengertianHalalHaram": None, "praktikSjph": None, "anggota": []},
+        "proses": {"pernyataanBebasBabi": None},
+    }
+
+
+def rencana(state: dict, live: dict | bool = True) -> list[dict]:
     """Daftar langkah formulir yang masih perlu dikerjakan supaya SIHALAL sesuai data percakapan. Idempoten."""
+    if not isinstance(live, dict):
+        pid = state.get("pengajuan_id")
+        if pid:
+            try:
+                import httpx
+
+                r = httpx.get(f"{_base_url()}/api/sihalal/pengajuan/{pid}", timeout=5.0)
+                live = r.json() if r.status_code == 200 else _live_kosong()
+            except Exception:
+                live = _live_kosong()
+        else:
+            live = _live_kosong()
     dok = state.get("dok") or {}
     kat = KATEGORI.get(state.get("kategori") or "", {})
     klasifikasi = kat.get("klasifikasi", "Makanan")
@@ -183,6 +211,11 @@ class _Layar:
         self.pg.get_by_role("tab", selected=True).wait_for()
         self.tab = tab
         self.catat(f"Membuka tab {tab}")
+
+    def lihat(self, tab: str = "") -> str:
+        target = (tab or "").strip() or self.tab or "bahan"
+        self.buka(target)
+        return self.pg.locator("body").inner_text()[:4000]
 
     def _tombol_tambah(self, judul_kartu: str = ""):
         if not judul_kartu:
@@ -293,14 +326,20 @@ class _Layar:
 
 
 # ---------------------------------------------------------------- pekerja latar belakang
+_hasil_pemeriksa_global: dict[str, dict] = {}
+_riwayat_global: dict[str, deque] = {}
+
+
 class _Pekerja:
-    def __init__(self, pelaksana=None):
+    def __init__(self, pelaksana=None, pembuat_layar=None):
         self._kunci = threading.Condition()
         self._menunggu: dict[str, dict] = {}   # pid -> pekerjaan terbaru (yang lama digantikan)
         self._berjalan: set[str] = set()
         self._riwayat: dict[str, deque] = {}
+        self._hasil_pemeriksa: dict[str, dict] = {}
         self._thread: threading.Thread | None = None
         self._pelaksana = pelaksana or self._pelaksana_playwright
+        self._pembuat_layar = pembuat_layar
         self._browser = None
         self._pw = None
         self._henti = False
@@ -344,8 +383,14 @@ class _Pekerja:
     def riwayat(self, pid: str) -> list[str]:
         return list(self._riwayat.get(pid, ()))
 
+    def hasil_pemeriksa(self, pid: str) -> dict | None:
+        h = self._hasil_pemeriksa.get(pid) or _hasil_pemeriksa_global.get(pid)
+        return copy.deepcopy(h) if h is not None else None
+
     def _catat(self, pid: str, teks: str) -> None:
-        self._riwayat.setdefault(pid, deque(maxlen=200)).append(f"{datetime.now().strftime('%H:%M:%S')} {teks}")
+        entri = f"{datetime.now().strftime('%H:%M:%S')} {teks}"
+        self._riwayat.setdefault(pid, deque(maxlen=200)).append(entri)
+        _riwayat_global.setdefault(pid, deque(maxlen=200)).append(entri)
         logger.info("[%s] %s", pid, teks)
 
     # ----- loop
@@ -386,15 +431,108 @@ class _Pekerja:
         pid, state, ref = kerja["pid"], kerja["state"], kerja["ref"]
         mulai = time.time()
         username = (state.get("akun") or {}).get("username") or ""
-        for percobaan in (1, 2):
-            gagal = self._pelaksana(pid, state, ref, username)
-            if not gagal:
-                break
-            self._catat(pid, f"{len(gagal)} langkah belum berhasil (percobaan {percobaan})")
+        gagal_op = self._jalankan_operator_sekali(pid, state, ref, username, ulangan=False)
+        hasil_periksa = self._jalankan_pemeriksa(pid, state, ref, username)
+        selisih_awal = list(hasil_periksa.get("selisih") or [])
+
+        if selisih_awal or gagal_op:
+            if selisih_awal:
+                ringkas = "; ".join(selisih_awal[:3])
+                self._catat(pid, f"Pemeriksa menemukan {len(selisih_awal)} selisih ({ringkas}), mengulang operator (1/1)")
+            else:
+                self._catat(pid, f"Pemeriksa: {len(gagal_op)} langkah belum berhasil, mengulang operator (1/1)")
+            # Batas ketat: ulangi operator maksimal 1 kali (strict limit) untuk mencegah infinite loop
+            self._jalankan_operator_sekali(pid, state, ref, username, ulangan=True)
+            hasil_periksa = self._jalankan_pemeriksa(pid, state, ref, username)
+            hasil_periksa["diulang"] = True
+            hasil_periksa["jumlah_ulang"] = 1
+            hasil_periksa["selisih_awal"] = selisih_awal
+            selisih_akhir = list(hasil_periksa.get("selisih") or [])
+            if selisih_akhir:
+                ringkas_akhir = "; ".join(selisih_akhir[:3])
+                self._catat(
+                    pid,
+                    f"Pemeriksa: masih ada {len(selisih_akhir)} selisih setelah 1x pengulangan ({ringkas_akhir}); berhenti sesuai batas ulang",
+                )
+            else:
+                self._catat(pid, "Pemeriksa: selisih teratasi setelah 1x pengulangan operator (cocok)")
+        else:
+            hasil_periksa["diulang"] = False
+            hasil_periksa["jumlah_ulang"] = 0
+            hasil_periksa["selisih_awal"] = []
+            self._catat(pid, "Pemeriksa: semua data SIHALAL sesuai dengan niat Kala (cocok)")
+
         sk.sinkron(state, ref, lewati=BAGIAN_FORMULIR)
         self._catat(pid, f"Selesai dalam {time.time() - mulai:.1f} detik")
+        hasil_periksa["riwayat"] = self.riwayat(pid)
+        self._hasil_pemeriksa[pid] = copy.deepcopy(hasil_periksa)
+        _hasil_pemeriksa_global[pid] = copy.deepcopy(hasil_periksa)
 
-    def _pelaksana_playwright(self, pid: str, state: dict, ref: str, username: str) -> list[dict]:
+    def _jalankan_operator_sekali(self, pid: str, state: dict, ref: str, username: str, ulangan: bool = False) -> list[dict]:
+        from . import agen_operator
+
+        perlu_fallback = True
+        if agen_aktif() and (not agen_operator.model_override_aktif() or agen_operator.model_siap_dipanggil()):
+            try:
+                gagal_agen = self._pelaksana_agen(pid, state, ref, username)
+                if not gagal_agen or not ulangan:
+                    perlu_fallback = False
+                    if gagal_agen:
+                        self._catat(pid, f"{len(gagal_agen)} langkah belum diselesaikan oleh agen operator")
+                    return gagal_agen
+                self._catat(
+                    pid,
+                    f"{len(gagal_agen)} langkah belum berhasil oleh agen, beralih ke pelaksana deterministik",
+                )
+            except Exception as e:
+                logger.warning("Agen operator terkendala untuk %s (%s), fallback ke deterministik", pid, e)
+                self._catat(pid, f"Agen operator terkendala ({type(e).__name__}), beralih ke pelaksana deterministik")
+        if perlu_fallback:
+            gagal = self._pelaksana(pid, state, ref, username)
+            if gagal:
+                self._catat(pid, f"{len(gagal)} langkah belum berhasil (percobaan {2 if ulangan else 1})")
+            return gagal
+        return []
+
+    def _jalankan_pemeriksa(self, pid: str, state: dict, ref: str, username: str) -> dict:
+        from . import agen_pemeriksa
+
+        pakai_layar = (self._pembuat_layar is not None) or (self._browser is not None)
+        pakai_agen = agen_pemeriksa.model_override_aktif() or (
+            agen_aktif() and os.environ.get("GEMINI_API_KEY", "") != "kunci-palsu"
+        )
+        if pakai_agen and not agen_pemeriksa.model_siap_dipanggil():
+            pakai_agen = False
+
+        if pakai_layar:
+            with self._buka_layar(pid, username, ref) as layar:
+                live_data = layar.baca() if hasattr(layar, "baca") else None
+                if pakai_agen:
+                    try:
+                        hasil = agen_pemeriksa.jalankan_sinkron(state, layar=layar, live=live_data, pid=pid)
+                    except Exception as e:
+                        logger.warning("Agen pemeriksa terkendala untuk %s (%s), fallback deterministik", pid, e)
+                        self._catat(pid, f"Agen pemeriksa terkendala ({type(e).__name__}), beralih ke pemeriksa deterministik")
+                        hasil = agen_pemeriksa.periksa_deterministik(state, live=live_data)
+                else:
+                    hasil = agen_pemeriksa.periksa_deterministik(state, live=live_data)
+                if self._pembuat_layar is not None:
+                    hasil["dari_layar"] = True
+                return hasil
+
+        if pakai_agen:
+            try:
+                return agen_pemeriksa.jalankan_sinkron(state, pid=pid)
+            except Exception as e:
+                logger.warning("Agen pemeriksa terkendala untuk %s (%s), fallback deterministik", pid, e)
+                self._catat(pid, f"Agen pemeriksa terkendala ({type(e).__name__}), beralih ke pemeriksa deterministik")
+        return agen_pemeriksa.periksa_deterministik(state)
+
+    @contextlib.contextmanager
+    def _buka_layar(self, pid: str, username: str, ref: str):
+        if self._pembuat_layar is not None:
+            yield self._pembuat_layar(pid, username, ref)
+            return
         from playwright.sync_api import sync_playwright
 
         if self._browser is None:
@@ -405,9 +543,23 @@ class _Pekerja:
             "localStorage.setItem('kawalhalal-sesi', %r);"
             "window.__kalaOperator = { ref: %r, catatan: 'Diinput operator Kala lewat formulir' };" % (username or "operator", ref)
         )
-        gagal = []
         try:
-            layar = _Layar(ctx, pid, lambda teks: self._catat(pid, teks))
+            yield _Layar(ctx, pid, lambda teks: self._catat(pid, teks))
+        finally:
+            ctx.close()
+
+    def _pelaksana_agen(self, pid: str, state: dict, ref: str, username: str) -> list[dict]:
+        from . import agen_operator
+
+        with self._buka_layar(pid, username, ref) as layar:
+            if not rencana(state, layar.baca()):
+                return []
+            hasil = agen_operator.jalankan_sinkron(state, layar, pid=pid)
+            return hasil.get("gagal") or []
+
+    def _pelaksana_playwright(self, pid: str, state: dict, ref: str, username: str) -> list[dict]:
+        gagal = []
+        with self._buka_layar(pid, username, ref) as layar:
             for t in rencana(state, layar.baca()):
                 try:
                     layar.lakukan(t)
@@ -415,9 +567,8 @@ class _Pekerja:
                     self._catat(pid, f"Gagal pada {t['aksi']}: {str(e).splitlines()[0][:120]}")
                     gagal.append(t)
                     layar.tab = None
-                    layar.pg.keyboard.press("Escape")
-        finally:
-            ctx.close()
+                    if getattr(layar, "pg", None) is not None:
+                        layar.pg.keyboard.press("Escape")
         return gagal
 
 
@@ -437,7 +588,18 @@ def sibuk(pid: str) -> bool:
 
 
 def riwayat(pid: str) -> list[str]:
-    return _pekerja.riwayat(pid)
+    return _pekerja.riwayat(pid) or list(_riwayat_global.get(pid, ()))
+
+
+def hasil_pemeriksa(pid: str) -> dict | None:
+    return _pekerja.hasil_pemeriksa(pid)
+
+
+def reset_pemeriksa() -> None:
+    _pekerja._hasil_pemeriksa.clear()
+    _pekerja._riwayat.clear()
+    _hasil_pemeriksa_global.clear()
+    _riwayat_global.clear()
 
 
 def tutup() -> None:
