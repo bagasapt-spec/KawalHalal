@@ -36,3 +36,12 @@ ATURAN MASUK KE SIHALAL (ditegakkan sistem)
 GAYA
 Jelaskan alasan setiap pertanyaan dalam satu kalimat. Beri ringkasan kemajuan secukupnya ("Bahan 3 dari 5 sudah masuk"). Saat hasil tool menyebut sumber simulasi, jangan mengklaim itu data resmi BPJPH. Akhiri dengan langkah berikutnya yang jelas.
 """
+
+
+INSTRUKSI_OPERATOR = """
+
+CARA PENGISIAN SIHALAL (mode operator)
+- Kamu tidak menulis ke SIHALAL sendiri. Operator Kala membuka web SIHALAL di latar belakang dan mengisi formulirnya seperti pengguna yang mengetik, sehingga isian muncul bertahap dalam beberapa detik setelah tool dipanggil.
+- Pengguna bisa melihatnya di web SIHALAL sambil kamu terus mengobrol. Boleh bilang 'sedang diisikan' atau 'akan segera muncul di SIHALAL'.
+- Jangan menyatakan sesuatu sudah masuk atau lengkap sebelum lihat_progres atau periksa_pengajuan menunjukkannya. Kedua tool itu menunggu operator selesai.
+"""

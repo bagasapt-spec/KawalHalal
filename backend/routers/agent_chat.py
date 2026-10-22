@@ -7,7 +7,7 @@ from typing import List, Optional
 from fastapi import APIRouter, File, Form, Header, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
-from kawal_agent import tautan
+from kawal_agent import operator_ui, tautan
 from kawal_agent.agent import di_loop_agen, hapus_sesi, jalankan_di_loop_agen, lihat_state
 from kawal_agent.tools import GENERATED_DIR
 
@@ -87,3 +87,10 @@ async def state(user_id: str, x_dev_key: Optional[str] = Header(None, alias="X-D
 async def reset(user_id: str, x_dev_key: Optional[str] = Header(None, alias="X-Dev-Key")):
     _kunci(x_dev_key)
     return {"dihapus": await di_loop_agen(hapus_sesi(re.sub(r"\D", "", user_id)))}
+
+
+@router.get("/operator/{pengajuan_id}")
+def operator(pengajuan_id: str, x_dev_key: Optional[str] = Header(None, alias="X-Dev-Key")):
+    """Log aksi operator Kala untuk satu pengajuan: apa yang dibuka, diisi, dan disimpan lewat formulir."""
+    _kunci(x_dev_key)
+    return {"aktif": operator_ui.aktif(), "sibuk": operator_ui.sibuk(pengajuan_id), "log": operator_ui.riwayat(pengajuan_id)}

@@ -36,8 +36,8 @@ from google.adk.sessions import InMemorySessionService
 from google.genai import types
 from pydantic import BaseModel, Field, model_validator
 
-from . import gates
-from .prompts import INSTRUKSI
+from . import gates, operator_ui
+from .prompts import INSTRUKSI, INSTRUKSI_OPERATOR
 from .tools import (
     SEMUA_TOOL,
     TOOL_REGISTRY,
@@ -873,14 +873,31 @@ def _guardrail_keluaran(callback_context, llm_response):
     return llm_response if berubah else None
 
 
+def _awal_giliran(callback_context) -> None:
+    """before_agent_callback: baca balasan YA atau TIDAK dari pengguna, lalu masukkan bahan bercelah yang disetujui.
+
+    Dilakukan di kode supaya persetujuan tidak bergantung pada model memanggil sinkron_ke_sihalal.
+    """
+    gates.proses_giliran_baru(callback_context)
+    keputusan = callback_context.state.get("keputusan_terakhir") or {}
+    if keputusan.get("aksi") == "masukkan_bahan_bermasalah" and keputusan.get("keputusan") == "disetujui":
+        from .tools import sinkron_ke_sihalal
+
+        try:
+            sinkron_ke_sihalal(callback_context)
+        except Exception as e:  # jangan jatuhkan giliran: model masih bisa memanggil sinkron_ke_sihalal sendiri
+            logger.error("Sinkron otomatis setelah persetujuan gagal: %s", e)
+    return None
+
+
 def bangun_agen(model=MODEL) -> Agent:
     return Agent(
         name="kawalhalal",
         model=model,
         description="Agen pendamping pengajuan sertifikasi halal untuk pelaku usaha.",
-        instruction=INSTRUKSI,
+        instruction=INSTRUKSI + (INSTRUKSI_OPERATOR if operator_ui.aktif() else ""),
         tools=SEMUA_TOOL,
-        before_agent_callback=gates.proses_giliran_baru,
+        before_agent_callback=_awal_giliran,
         after_model_callback=_guardrail_keluaran,
         generate_content_config=types.GenerateContentConfig(temperature=0.2),
     )

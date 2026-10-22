@@ -133,3 +133,44 @@ def test_tanpa_kunci_model_jujur_tidak_pura_pura(monkeypatch):
     monkeypatch.delenv("GOOGLE_GENAI_USE_ENTERPRISE", raising=False)
     r = jalan("+628115", "halo")
     assert r["aktif"] is False and "belum aktif" in r["balasan"]
+
+
+def test_ya_otomatis_memasukkan_bahan_tanpa_model_memanggil_sinkron():
+    """Bahan bercelah: sistem mencatat konfirmasi sendiri, dan balasan YA langsung memasukkannya walau model hanya membalas teks."""
+    pakai([
+        lambda r: panggil("pilih_kategori", kategori="makanan"),
+        lambda r: panggil("daftarkan_akun_sihalal", nama_usaha="Bakso Pak Joko", nama_penanggung_jawab="Joko", email="joko@example.com",
+                          no_hp="081234567890", nib="9120001234567", alamat="Jl. Mawar 1", kab_kota="Bandung", provinsi="Jawa Barat",
+                          kode_pos="40135", skala="mikro"),
+        lambda r: panggil("buat_draf_pengajuan", jalur="self-declare"),
+        # model LUPA memanggil minta_konfirmasi, hanya bertanya lewat teks
+        lambda r: panggil("tambah_bahan", nama="Gelatin", jenis="bahan", produsen="", nomor_sertifikat="", pemasok="", jenis_hewan="", foto_bukti=""),
+        lambda r: teks("Gelatin belum ada sertifikat. Tetap dimasukkan? YA atau TIDAK."),
+        # giliran 2: model hanya membalas teks, tidak memanggil tool apa pun
+        lambda r: teks("Baik, sudah masuk."),
+    ])
+    u = "+628119"
+    jalan(u, "mulai")
+    pid = asyncio.run(A.lihat_state(u))["pengajuan_id"]
+    assert sm._cari(pid)["bahan"]["daftarBahan"] == []
+    assert asyncio.run(A.lihat_state(u))["menunggu"]["id"] == "masukkan_bahan_bermasalah"
+    jalan(u, "ya")
+    assert [b["nama"] for b in sm._cari(pid)["bahan"]["daftarBahan"]] == ["Gelatin"]
+
+
+def test_jawaban_ragu_tidak_memasukkan_bahan():
+    pakai([
+        lambda r: panggil("pilih_kategori", kategori="makanan"),
+        lambda r: panggil("daftarkan_akun_sihalal", nama_usaha="Warung A", nama_penanggung_jawab="Ani", email="ani@example.com",
+                          no_hp="081234567891", nib="", alamat="Jl. B", kab_kota="Bandung", provinsi="Jawa Barat",
+                          kode_pos="40111", skala="mikro"),
+        lambda r: panggil("buat_draf_pengajuan", jalur="self-declare"),
+        lambda r: panggil("tambah_bahan", nama="Gelatin", jenis="bahan", produsen="", nomor_sertifikat="", pemasok="", jenis_hewan="", foto_bukti=""),
+        lambda r: teks("Tetap dimasukkan?"),
+        lambda r: teks("Baik."),
+    ])
+    u = "+628118"
+    jalan(u, "mulai")
+    pid = asyncio.run(A.lihat_state(u))["pengajuan_id"]
+    jalan(u, "ya tapi nanti dulu")
+    assert sm._cari(pid)["bahan"]["daftarBahan"] == []

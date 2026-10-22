@@ -66,7 +66,8 @@ def bahan_siap_masuk(state, item: dict) -> bool:
     return v.get("verdict") == "bersih" or bool(item.get("disetujui"))
 
 
-def sinkron(state, ref: str = "") -> dict:
+def sinkron(state, ref: str = "", lewati=frozenset()) -> dict:
+    """Tulis data percakapan ke mock. Bagian dalam `lewati` dikerjakan operator lewat formulir (operator_ui)."""
     pid = state.get("pengajuan_id")
     if not pid:
         return {"disinkronkan": False, "alasan": "Belum ada draf pengajuan di SIHALAL. Buat drafnya dulu."}
@@ -98,67 +99,73 @@ def sinkron(state, ref: str = "") -> dict:
                 diubah.append(bagian)
 
         # ---- bahan ----
-        bahan_sendiri = []
         id_bahan: dict[str, str] = {}
-        for item in dok.get("bahan", []):
-            v = item.get("verifikasi") or {}
-            if not bahan_siap_masuk(state, item):
-                if v.get("verdict") != "haram":
-                    ditahan.append(item["nama"])
-                continue
-            bid = f"{AWALAN}b-{slug(item['nama'])}"
-            id_bahan[_norm(item["nama"])] = bid
-            baris = {
-                "id": bid,
-                "tipe": "bersertifikat" if v.get("nomor_dipakai") else "tidak-bersertifikat",
-                "jenis": item.get("jenis") or "bahan",
-                "nama": item["nama"],
-                "bukti": v.get("bukti", "kurang"),
-                "alasanBukti": (v.get("alasan", "") + (f" Langkah: {v['langkah_berikutnya']}" if v.get("langkah_berikutnya") else "")).strip(),
-                "konfirmasi": "terkonfirmasi" if item.get("dikonfirmasi") else "perlu-konfirmasi",
-                "sumber": sumber("Diverifikasi KawalHalal terhadap registri simulasi", 0.95 if v.get("verdict") == "bersih" else 0.6),
-            }
-            if item.get("produsen"):
-                baris["produsen"] = item["produsen"]
-            if v.get("nomor_dipakai"):
-                baris["noSertifikat"] = v["nomor_dipakai"]
-            if item.get("foto_bukti"):
-                baris["fotoSumber"] = {"nama": item["foto_bukti"]}
-            bahan_sendiri.append(baris)
+        if "bahan" in lewati:
+            id_bahan = {_norm(x["nama"]): x["id"] for x in p["bahan"]["daftarBahan"]}
+        else:
+            bahan_sendiri = []
+            for item in dok.get("bahan", []):
+                v = item.get("verifikasi") or {}
+                if not bahan_siap_masuk(state, item):
+                    if v.get("verdict") != "haram":
+                        ditahan.append(item["nama"])
+                    continue
+                bid = f"{AWALAN}b-{slug(item['nama'])}"
+                id_bahan[_norm(item["nama"])] = bid
+                baris = {
+                    "id": bid,
+                    "tipe": "bersertifikat" if v.get("nomor_dipakai") else "tidak-bersertifikat",
+                    "jenis": item.get("jenis") or "bahan",
+                    "nama": item["nama"],
+                    "bukti": v.get("bukti", "kurang"),
+                    "alasanBukti": (v.get("alasan", "") + (f" Langkah: {v['langkah_berikutnya']}" if v.get("langkah_berikutnya") else "")).strip(),
+                    "konfirmasi": "terkonfirmasi" if item.get("dikonfirmasi") else "perlu-konfirmasi",
+                    "sumber": sumber("Diverifikasi KawalHalal terhadap registri simulasi", 0.95 if v.get("verdict") == "bersih" else 0.6),
+                }
+                if item.get("produsen"):
+                    baris["produsen"] = item["produsen"]
+                if v.get("nomor_dipakai"):
+                    baris["noSertifikat"] = v["nomor_dipakai"]
+                if item.get("foto_bukti"):
+                    baris["fotoSumber"] = {"nama": item["foto_bukti"]}
+                bahan_sendiri.append(baris)
 
-        catatan_pembelian, pemeriksaan = [], []
-        for i, r in enumerate(dok.get("pembelian", []), start=1):
-            bid = id_bahan.get(_norm(r.get("bahan", "")))
-            if not bid:
-                tak_cocok.append(f"Pembelian '{r.get('bahan')}' belum cocok dengan bahan yang sudah masuk.")
-                continue
-            catatan_pembelian.append({"id": f"{AWALAN}cp-{i}", "bahanId": bid, "jumlah": _angka(r.get("jumlah")), "satuan": r.get("satuan", ""),
-                                      "tanggal": r.get("tanggal", ""), "sumber": sumber("Dari jawaban pengguna", 1.0)})
-            pemeriksaan.append({"id": f"{AWALAN}pk-{i}", "bahanId": bid, "lokasi": r.get("lokasi_periksa", ""),
-                                "tanggal": r.get("tanggal_periksa", ""), "sumber": sumber("Dari jawaban pengguna", 1.0)})
+            catatan_pembelian, pemeriksaan = [], []
+            for i, r in enumerate(dok.get("pembelian", []), start=1):
+                bid = id_bahan.get(_norm(r.get("bahan", "")))
+                if not bid:
+                    tak_cocok.append(f"Pembelian '{r.get('bahan')}' belum cocok dengan bahan yang sudah masuk.")
+                    continue
+                catatan_pembelian.append({"id": f"{AWALAN}cp-{i}", "bahanId": bid, "jumlah": _angka(r.get("jumlah")), "satuan": r.get("satuan", ""),
+                                          "tanggal": r.get("tanggal", ""), "sumber": sumber("Dari jawaban pengguna", 1.0)})
+                pemeriksaan.append({"id": f"{AWALAN}pk-{i}", "bahanId": bid, "lokasi": r.get("lokasi_periksa", ""),
+                                    "tanggal": r.get("tanggal_periksa", ""), "sumber": sumber("Dari jawaban pengguna", 1.0)})
 
-        daftar_lama = p["bahan"]
-        tulis("bahan", {
-            "daftarBahan": _milik_pengguna(daftar_lama["daftarBahan"]) + bahan_sendiri,
-            "catatanPembelian": _milik_pengguna(daftar_lama["catatanPembelian"]) + catatan_pembelian,
-            "pemeriksaan": _milik_pengguna(daftar_lama["pemeriksaan"]) + pemeriksaan,
-        }, "Menyelaraskan daftar bahan dari percakapan")
+            daftar_lama = p["bahan"]
+            tulis("bahan", {
+                "daftarBahan": _milik_pengguna(daftar_lama["daftarBahan"]) + bahan_sendiri,
+                "catatanPembelian": _milik_pengguna(daftar_lama["catatanPembelian"]) + catatan_pembelian,
+                "pemeriksaan": _milik_pengguna(daftar_lama["pemeriksaan"]) + pemeriksaan,
+            }, "Menyelaraskan daftar bahan dari percakapan")
 
         # ---- produk dan pemetaan ----
         id_produk: dict[str, str] = {}
-        produk_sendiri, pemetaan_sendiri = [], []
-        ids_bahan_p = [b["id"] for b in bahan_sendiri if b["jenis"] in ("bahan", "kemasan")]
-        for r in dok.get("produk", []):
-            pr_id = f"{AWALAN}pr-{slug(r['nama'])}"
-            id_produk[_norm(r["nama"])] = pr_id
-            produk_sendiri.append({
-                "id": pr_id, "klasifikasi": kat.get("klasifikasi", "Makanan"), "rincian": r.get("rincian") or "Lainnya",
-                "nama": r["nama"], "merek": r.get("merek", ""), "bahanIds": ids_bahan_p, "sumber": sumber("Dari jawaban pengguna", 1.0),
-            })
-            if pabrik_id:
-                pemetaan_sendiri.append({"id": f"{AWALAN}pm-{slug(r['nama'])}", "produkId": pr_id, "pabrikId": pabrik_id})
-        tulis("produk", _milik_pengguna(p["produk"]) + produk_sendiri, "Menyelaraskan daftar produk dari percakapan")
-        tulis("pemetaan", _milik_pengguna(p["pemetaan"]) + pemetaan_sendiri, "Memetakan produk ke fasilitas produksi")
+        if "produk" in lewati:
+            id_produk = {_norm(x["nama"]): x["id"] for x in p["produk"]}
+        else:
+            produk_sendiri, pemetaan_sendiri = [], []
+            ids_bahan_p = [b["id"] for b in bahan_sendiri if b["jenis"] in ("bahan", "kemasan")]
+            for r in dok.get("produk", []):
+                pr_id = f"{AWALAN}pr-{slug(r['nama'])}"
+                id_produk[_norm(r["nama"])] = pr_id
+                produk_sendiri.append({
+                    "id": pr_id, "klasifikasi": kat.get("klasifikasi", "Makanan"), "rincian": r.get("rincian") or "Lainnya",
+                    "nama": r["nama"], "merek": r.get("merek", ""), "bahanIds": ids_bahan_p, "sumber": sumber("Dari jawaban pengguna", 1.0),
+                })
+                if pabrik_id:
+                    pemetaan_sendiri.append({"id": f"{AWALAN}pm-{slug(r['nama'])}", "produkId": pr_id, "pabrikId": pabrik_id})
+            tulis("produk", _milik_pengguna(p["produk"]) + produk_sendiri, "Menyelaraskan daftar produk dari percakapan")
+            tulis("pemetaan", _milik_pengguna(p["pemetaan"]) + pemetaan_sendiri, "Memetakan produk ke fasilitas produksi")
 
         # ---- proses ----
         proses = copy.deepcopy(p["proses"])
@@ -202,14 +209,15 @@ def sinkron(state, ref: str = "") -> dict:
         tulis("proses", proses, "Menyelaraskan proses produksi dari percakapan")
 
         # ---- komitmen ----
-        komitmen = copy.deepcopy(p["komitmen"])
-        for k_state, k_field in KOMITMEN_KUNCI.items():
-            komitmen[k_field] = _persetujuan(state, k_state, ref) or komitmen[k_field]
-        komitmen["anggota"] = _milik_pengguna(komitmen["anggota"]) + [
-            {"id": f"{AWALAN}an-{i}", "nama": a["nama"], "jabatan": a["jabatan"], "posisi": a["posisi"], "sumber": sumber("Dari jawaban pengguna", 1.0)}
-            for i, a in enumerate(state.get("anggota") or [], start=1)
-        ]
-        tulis("komitmen", komitmen, "Menyelaraskan komitmen dan tanggung jawab dari percakapan")
+        if "komitmen" not in lewati:
+            komitmen = copy.deepcopy(p["komitmen"])
+            for k_state, k_field in KOMITMEN_KUNCI.items():
+                komitmen[k_field] = _persetujuan(state, k_state, ref) or komitmen[k_field]
+            komitmen["anggota"] = _milik_pengguna(komitmen["anggota"]) + [
+                {"id": f"{AWALAN}an-{i}", "nama": a["nama"], "jabatan": a["jabatan"], "posisi": a["posisi"], "sumber": sumber("Dari jawaban pengguna", 1.0)}
+                for i, a in enumerate(state.get("anggota") or [], start=1)
+            ]
+            tulis("komitmen", komitmen, "Menyelaraskan komitmen dan tanggung jawab dari percakapan")
 
         # ---- pemantauan (tanda tangan) ----
         pemantauan = copy.deepcopy(p["pemantauan"])

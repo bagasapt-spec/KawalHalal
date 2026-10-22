@@ -311,7 +311,7 @@ def cek_bukti_hewan_sembelihan(jenis_hewan: str, nama_rph_rpu: str, nomor_sertif
             "langkah_berikutnya": "Lampirkan salinan sertifikat pada paket persiapan; pemeriksaan kehalalan oleh LPH."}
 
 
-from . import gates, registri, sinkron, tautan, templates
+from . import gates, operator_ui, registri, sinkron, tautan, templates
 from .kategori import KATEGORI, cari_kategori, daftar_kategori
 from .verifikasi import verifikasi_bahan
 
@@ -344,6 +344,8 @@ def _simpan(tc: ToolContext, dok: dict) -> None:
 
 
 def _sinkron(tc: ToolContext) -> dict:
+    if operator_ui.aktif():
+        return operator_ui.serahkan(tc.state, _ref(tc))
     return sinkron.sinkron(tc.state, _ref(tc))
 
 
@@ -381,6 +383,8 @@ def _pengajuan(tc: ToolContext):
     pid = tc.state.get("pengajuan_id")
     if not pid:
         return None
+    if operator_ui.aktif():
+        operator_ui.tunggu(pid)  # pemeriksaan harus melihat hasil kerja operator, bukan keadaan setengah jadi
     with sm._kunci:
         try:
             return copy.deepcopy(sm._cari(pid))
@@ -781,10 +785,19 @@ def tambah_bahan(
         "kelengkapan": sk.get("kelengkapan"),
     }
     if v["verdict"] == "perlu_tindak_lanjut":
+        # Permintaan konfirmasi dicatat oleh sistem, bukan bergantung pada model: balasan YA berikutnya pasti diproses.
+        ditahan = _bahan_bermasalah(tool_context)
+        gates.minta(
+            tool_context.state, "masukkan_bahan_bermasalah",
+            "Bahan bercelah: " + ", ".join(f"{b['nama']} (bukti {b['verifikasi']['bukti']})" for b in ditahan) + ". Tetap dimasukkan sebagai 'perlu konfirmasi'?",
+            tool_context.invocation_id or "", _fp_bahan(tool_context),
+        )
+        hasil["konfirmasi_dicatat_sistem"] = True
         hasil["aturan"] = (
-            "Bahan ini BELUM masuk SIHALAL. Jelaskan celahnya dan langkah berikutnya kepada pengguna dengan bahasa sederhana. "
-            "Setelah semua bahan selesai dibahas, panggil minta_konfirmasi('masukkan_bahan_bermasalah', ringkasan) "
-            "untuk menanyakan apakah bahan bercelah tetap mau dimasukkan sebagai 'perlu konfirmasi', atau pengguna mau memperbaiki buktinya dulu."
+            "Bahan ini BELUM masuk SIHALAL. Sistem sudah mencatat permintaan konfirmasi. Jelaskan celahnya dan langkah berikutnya "
+            "dengan bahasa sederhana, tawarkan perbaikan bukti (mis. foto label atau nomor sertifikat), lalu tutup dengan SATU pertanyaan "
+            "yang bisa dijawab YA atau TIDAK: tetap masukkan bahan bercelah sebagai 'perlu konfirmasi'? Jangan mengajukan pertanyaan YA atau TIDAK lain "
+            "di pesan yang sama. Jika pengguna menjawab YA, bahan dimasukkan otomatis."
         )
     elif not tool_context.state.get("pengajuan_id"):
         hasil["aturan"] = "Bahan tercatat dan akan masuk otomatis begitu draf pengajuan dibuat."

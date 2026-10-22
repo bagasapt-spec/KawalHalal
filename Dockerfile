@@ -15,6 +15,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+# Operator Kala mengisi web SIHALAL lewat browser tanpa kepala (KALA_OPERATOR=ui)
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/pw
+RUN playwright install --with-deps chromium && chmod -R a+rX /opt/pw
 COPY backend/ .
 COPY --from=frontend /fe/dist ./static
 RUN useradd --create-home --uid 10001 appuser && chown -R appuser /app

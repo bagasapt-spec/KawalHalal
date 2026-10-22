@@ -14,8 +14,15 @@ export interface TabProps {
   pu: PelakuUsaha | undefined;
 }
 
-/** Penanda bahwa data diisi atau diubah manual oleh pelaku usaha. */
+/**
+ * Penanda bahwa data diisi atau diubah manual oleh pelaku usaha. Bila formulir dijalankan operator Kala
+ * (browser yang memasang window.__kalaOperator), asalnya dicatat sebagai KawalHalal supaya tetap terlacak.
+ */
 export function sumberPengguna(): Sumber {
+  const operator = (window as { __kalaOperator?: { ref?: string; catatan?: string } }).__kalaOperator;
+  if (operator) {
+    return { oleh: "kawalhalal", waktu: new Date().toISOString(), keyakinan: 1, ref: operator.ref, catatan: operator.catatan };
+  }
   return { oleh: "pengguna", waktu: new Date().toISOString() };
 }
 
