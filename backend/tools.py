@@ -104,6 +104,8 @@ _KATA_KRITIS = [
     "pengemulsi", "lesitin", "lecithin", "perisa", "flavour", "flavor", "essence", "esens",
     "alkohol", "etanol", "keju", "whey", "rennet", "kaldu", "pepsin", "sistein", "cysteine",
     "karmin", "carmine", "shellac", "mono dan digliserida", "digliserida", "gliserol", "gliserin",
+    "plasenta", "placenta", "lanolin", "stearat", "stearate", "stearic", "tallow", "squalene", "skualen",
+    "keratin", "glycerin", "glycerol", "alcohol denat",
 ]
 _E_HEWANI = {"120", "422", "430", "431", "432", "433", "434", "435", "436", "441", "470", "471", "472",
              "473", "474", "475", "477", "481", "482", "483", "542", "570", "627", "631", "635", "904"}
@@ -113,6 +115,8 @@ _KATA_NABATI_MINERAL = [
     "sayur", "wortel", "tomat", "kentang", "buah", "minyak sawit", "minyak nabati", "minyak kelapa",
     "santan", "kelapa", "soda kue", "baking soda", "kalsium karbonat", "asam sitrat", "ragi", "cuka",
     "telur", "madu", "teh", "kopi", "kakao", "cokelat bubuk",
+    "minyak goreng", "sawit", "daun", "jeruk", "lemon", "kemiri", "pala", "sereh", "serai", "kayu manis",
+    "cengkeh", "asam jawa", "gula merah", "gula aren", "aqua", "water", "shea butter", "aloe vera",
 ]
 _KATA_NABATI_PENANDA = ["nabati", "kedelai", "sawit", "kelapa", "soy", "vegetable", "palm"]
 

@@ -1,0 +1,27 @@
+{
+  "_catatan": "DATA SIMULASI untuk demo. Merek, produsen, dan nomor sertifikat di berkas ini fiktif, bukan data BPJPH. Ganti dengan data resmi sebelum dipakai di luar demo.",
+  "produk": [
+    {"nomor_sertifikat": "ID3111000012345", "nama_produk": "Mie Instan Goreng Original", "merek": "Mie Sedap Nusa", "produsen": "PT Sumber Pangan Nusantara", "kategori": "makanan", "status": "Berlaku", "tanggal_kadaluarsa": "2027-08-15"},
+    {"nomor_sertifikat": "ID0011000000001", "nama_produk": "Susu UHT Cokelat", "merek": "Susu Nusa", "produsen": "PT Nusantara Dairy Indonesia", "kategori": "minuman", "status": "Berlaku", "tanggal_kadaluarsa": "2028-01-30"},
+    {"nomor_sertifikat": "ID2210000067890", "nama_produk": "Biskuit Krim Vanila", "merek": "Biskuit Manis Lestari", "produsen": "PT Manis Lestari", "kategori": "makanan", "status": "Kadaluarsa", "tanggal_kadaluarsa": "2024-03-10"},
+    {"nomor_sertifikat": "ID4410000054321", "nama_produk": "Permen Jelly Buah", "merek": "Jelly Kenyal", "produsen": "PT Kenyal Sejahtera", "kategori": "makanan", "status": "Dicabut", "tanggal_kadaluarsa": "2025-05-20"},
+    {"nomor_sertifikat": "ID1230000100101", "nama_produk": "Kecap Manis", "merek": "Kecap Cap Layar", "produsen": "PT Pangan Bahari", "kategori": "makanan", "status": "Berlaku", "tanggal_kadaluarsa": "2028-06-18"},
+    {"nomor_sertifikat": "ID1230000100102", "nama_produk": "Bumbu Kaldu Rasa Ayam", "merek": "Kaldu Rasa Sedap", "produsen": "PT Citarasa Nusantara", "kategori": "makanan", "status": "Berlaku", "tanggal_kadaluarsa": "2028-06-30"},
+    {"nomor_sertifikat": "ID1230000100103", "nama_produk": "Saus Sambal", "merek": "Sambal Merah Delima", "produsen": "PT Delima Pangan", "kategori": "makanan", "status": "Berlaku", "tanggal_kadaluarsa": "2027-12-01"},
+    {"nomor_sertifikat": "ID1230000100104", "nama_produk": "Minyak Goreng Sawit", "merek": "Minyak Kuning Emas", "produsen": "PT Sawit Makmur", "kategori": "makanan", "status": "Berlaku", "tanggal_kadaluarsa": "2028-03-10"},
+    {"nomor_sertifikat": "ID1230000100105", "nama_produk": "Tepung Tapioka", "merek": "Tapioka Cap Perahu", "produsen": "CV Tani Lestari", "kategori": "makanan", "status": "Berlaku", "tanggal_kadaluarsa": "2027-09-09"},
+    {"nomor_sertifikat": "ID1230000100106", "nama_produk": "Santan Kelapa Instan", "merek": "Santan Kelapa Mas", "produsen": "PT Kelapa Mas", "kategori": "makanan", "status": "Kadaluarsa", "tanggal_kadaluarsa": "2025-01-15"},
+    {"nomor_sertifikat": "ID1230000100107", "nama_produk": "Teh Celup Melati", "merek": "Teh Melati Asri", "produsen": "PT Teh Asri", "kategori": "minuman", "status": "Berlaku", "tanggal_kadaluarsa": "2028-02-02"},
+    {"nomor_sertifikat": "ID1230000100108", "nama_produk": "Sirup Markisa", "merek": "Sirup Markisa Segar", "produsen": "PT Sari Buah Prima", "kategori": "minuman", "status": "Berlaku", "tanggal_kadaluarsa": "2027-10-20"},
+    {"nomor_sertifikat": "ID1230000100109", "nama_produk": "Bedak Padat", "merek": "Bedak Ayu Pagi", "produsen": "PT Kosmetika Ayu", "kategori": "kosmetik", "status": "Berlaku", "tanggal_kadaluarsa": "2028-05-05"},
+    {"nomor_sertifikat": "ID1230000100110", "nama_produk": "Lipstik Matte", "merek": "Lip Senja", "produsen": "PT Kosmetika Ayu", "kategori": "kosmetik", "status": "Kadaluarsa", "tanggal_kadaluarsa": "2025-02-01"},
+    {"nomor_sertifikat": "ID1230000100111", "nama_produk": "Sabun Cuci Piring", "merek": "Sabun Bersih Kilau", "produsen": "PT Bersih Sentosa", "kategori": "barang_gunaan", "status": "Berlaku", "tanggal_kadaluarsa": "2028-04-04"},
+    {"nomor_sertifikat": "ID1230000100112", "nama_produk": "Kemasan Plastik Makanan", "merek": "Kemasan Bening", "produsen": "PT Plastik Jaya", "kategori": "barang_gunaan", "status": "Berlaku", "tanggal_kadaluarsa": "2028-08-08"}
+  ],
+  "pemasok_daging": [
+    {"lapak": "Lapak Daging Barokah Pak Slamet", "pasar": "Pasar Ciroyom Bandung", "hewan": ["sapi"], "rph_rpu": "RPH Cakung Halal", "nomor_sertifikat": "ID3174000100001"},
+    {"lapak": "Lapak Ayam Segar Ibu Eni", "pasar": "Pasar Ciroyom Bandung", "hewan": ["ayam", "bebek"], "rph_rpu": "RPU Sumber Unggas Halal", "nomor_sertifikat": "ID3175000200002"},
+    {"lapak": "Lapak Ayam Mitra Pak Dedi", "pasar": "Pasar Kosambi Bandung", "hewan": ["ayam"], "rph_rpu": "RPU Mitra Ayam Sejahtera", "nomor_sertifikat": "ID3175000200003"},
+    {"lapak": "Lapak Daging Kambing Haji Ujang", "pasar": "Pasar Kosambi Bandung", "hewan": ["kambing"], "rph_rpu": null, "nomor_sertifikat": null}
+  ]
+}

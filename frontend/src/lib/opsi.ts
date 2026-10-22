@@ -4,6 +4,9 @@ import type { SelectOption } from "../components/ui/Select.tsx";
 export const klasifikasiProduk: Record<string, string[]> = {
   Makanan: ["Produk olahan daging", "Makanan siap saji", "Roti dan kue", "Makanan ringan", "Bumbu dan saus"],
   Minuman: ["Minuman berbasis teh", "Minuman berbasis kopi", "Minuman sari buah", "Minuman lainnya"],
+  Kosmetik: ["Perawatan kulit", "Perawatan rambut", "Tata rias", "Parfum dan wewangian"],
+  "Barang Gunaan": ["Peralatan rumah tangga", "Kemasan dan wadah", "Pakaian dan aksesori", "Barang gunaan lainnya"],
+  Jasa: ["Penyembelihan", "Pengolahan", "Penyimpanan", "Pengemasan", "Distribusi", "Penjualan", "Penyajian"],
 };
 
 export const opsiKlasifikasi: SelectOption[] = Object.keys(klasifikasiProduk).map((k) => ({ value: k, label: k }));

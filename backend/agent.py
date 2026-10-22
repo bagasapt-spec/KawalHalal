@@ -441,11 +441,14 @@ class KawalHalalAgent:
         )
 
 
-def process_in_background(session_id: str, warung_id: str):
+def process_in_background(session_id: str, warung_id: str, **kwargs):
+    """Entri dari webhook WhatsApp/ingest dev: jalankan agen ADK (kawal_agent) dan kirim balasannya.
+
+    Aman dipanggil dari thread BackgroundTasks maupun dari fungsi async (webhook Meta): pekerjaan
+    dijadwalkan ke satu event loop khusus agen dan fungsi ini langsung kembali.
     """
-    Background worker stub:
-    Dispatches agent execution loop (e.g. process_event) and sends replies
-    via Meta WhatsApp Cloud API (send_text) or Twilio REST API.
-    """
-    logger.info(f"Triggered background agent processing for session={session_id}, warung={warung_id}")
-    # STUB: nanti diganti process_event(...) dari agen Bagas
+    from kawal_agent.agent import kirim_ke_loop_agen
+    from services.wa_agent import proses
+
+    logger.info(f"Agen dipicu: session={session_id}, warung={warung_id}")
+    kirim_ke_loop_agen(proses(session_id, warung_id, **kwargs))

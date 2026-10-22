@@ -8,6 +8,8 @@ yang dipanggil dari klik pengguna di web (human gate).
 import copy
 import json
 import os
+import re
+import secrets
 import threading
 import time
 from datetime import datetime, timedelta, timezone
@@ -255,9 +257,87 @@ def ubah_bagian(
     return p
 
 
+# ---------- Akun pelaku usaha (pendaftaran lewat agen) ----------
+
+_akun: dict[str, dict] = {}  # username -> {"password", "email"}
+
+
+def _slug_username(nama_usaha: str) -> str:
+    dasar = re.sub(r"[^a-z0-9]+", ".", nama_usaha.lower()).strip(".")
+    return dasar or "pelaku.usaha"
+
+
+def daftarkan_akun(
+    nama_usaha: str,
+    nama_pj: str,
+    email: str,
+    no_hp: str,
+    nib: str,
+    alamat: str,
+    kab_kota: str,
+    provinsi: str,
+    kode_pos: str,
+    skala: str,
+) -> dict:
+    """Buat akun pelaku usaha tiruan dan ganti profil pelaku usaha aktif (mock satu penyewa).
+
+    Pabrik, outlet, dan penyelia halal diisi dari data penanggung jawab dan alamat usaha supaya
+    pengajuan bisa langsung memilihnya. Nomor KTP penyelia sengaja dikosongkan (tidak disimpan di MVP).
+    Mengembalikan username dan password sementara; password hanya ditampilkan sekali.
+    """
+    global _pelaku_usaha
+    with _kunci:
+        username = _slug_username(nama_usaha)
+        if username in _akun and _akun[username]["email"] != email:
+            username = f"{username}.{secrets.token_hex(2)}"
+        password = secrets.token_urlsafe(6)
+        _akun[username] = {"password": password, "email": email}
+        tgl = datetime.now(WIB).date().isoformat()
+        alamat_usaha = {"alamat": alamat, "provinsi": provinsi, "kabKota": kab_kota, "kodePos": kode_pos}
+        _pelaku_usaha = {
+            "id": _id("pu"),
+            "namaUsaha": nama_usaha,
+            "nib": nib,
+            "skala": skala,
+            **alamat_usaha,
+            "penanggungJawab": {"nama": nama_pj, "noHp": no_hp, "email": email},
+            "aspekLegal": [{"id": _id("al"), "jenis": "NIB", "nomor": nib, "tanggal": tgl, "instansiPenerbit": "OSS (BKPM)"}]
+            if nib
+            else [],
+            "pabrik": [{"id": _id("pb"), "nama": f"Dapur {nama_usaha}", **alamat_usaha, "status": "milik-sendiri"}],
+            "outlet": [{"id": _id("ot"), "nama": nama_usaha, **alamat_usaha}],
+            "penyeliaHalal": [{"id": _id("py"), "nama": nama_pj, "noKtp": "", "agama": "Islam"}],
+        }
+        return {"username": username, "password": password, "pelaku_usaha": copy.deepcopy(_pelaku_usaha)}
+
+
+def cek_masuk(pengguna: str, password: str) -> bool:
+    id_ = pengguna.strip().lower()
+    for username, a in _akun.items():
+        if id_ in (username, a["email"].lower()) and password == a["password"]:
+            return True
+    return False
+
+
+def pelaku_usaha_aktif() -> dict:
+    with _kunci:
+        return copy.deepcopy(_pelaku_usaha)
+
+
 # ---------- Endpoint ----------
 
 router = APIRouter()
+
+
+class MasukAkun(BaseModel):
+    pengguna: str
+    password: str
+
+
+@router.post("/api/sihalal/akun/masuk")
+def masuk_akun(body: MasukAkun):
+    """Cek akun yang didaftarkan lewat agen. Akun demo bawaan tetap dicek di browser."""
+    return {"berhasil": cek_masuk(body.pengguna, body.password)}
 
 
 class BuatPengajuan(BaseModel):
@@ -303,23 +383,28 @@ def patch_bagian(pengajuan_id: str, bagian: str, isi: Any = Body(...)):
         return ubah_bagian(pengajuan_id, bagian, isi)
 
 
+def kirim_draf(pengajuan_id: str, pelaku: str = "pengguna", catatan: str = "Dikirim oleh pelaku usaha") -> dict:
+    """Kirim pengajuan bila semua tab lengkap. Dipanggil endpoint kirim dan tool agen (setelah konfirmasi)."""
+    global _nomor_berikutnya
+    p = _cari(pengajuan_id)
+    if not _bisa_diubah(p):
+        raise HTTPException(409, "Pengajuan ini sudah dikirim.")
+    kurang = [LABEL_TAB[t] for t, s in hitung_kelengkapan(p).items() if s["done"] < s["total"]]
+    if kurang:
+        raise HTTPException(422, f"Pengajuan belum lengkap di tab {', '.join(kurang)}. Lengkapi isian lalu kirim lagi.")
+    if not p["nomorDaftar"]:
+        p["nomorDaftar"] = f"SH2026-1-{_nomor_berikutnya:06d}"
+        _nomor_berikutnya += 1
+    p["status"] = "terkirim"
+    p["riwayat"].append({"status": "terkirim", "waktu": _sekarang(), "catatan": catatan})
+    _catat(p, pelaku, "Mengirim pengajuan")
+    return p
+
+
 @router.post("/api/sihalal/pengajuan/{pengajuan_id}/kirim")
 def kirim_pengajuan(pengajuan_id: str):
-    global _nomor_berikutnya
     with _kunci:
-        p = _cari(pengajuan_id)
-        if not _bisa_diubah(p):
-            raise HTTPException(409, "Pengajuan ini sudah dikirim.")
-        kurang = [LABEL_TAB[t] for t, s in hitung_kelengkapan(p).items() if s["done"] < s["total"]]
-        if kurang:
-            raise HTTPException(422, f"Pengajuan belum lengkap di tab {', '.join(kurang)}. Lengkapi isian lalu kirim lagi.")
-        if not p["nomorDaftar"]:
-            p["nomorDaftar"] = f"SH2026-1-{_nomor_berikutnya:06d}"
-            _nomor_berikutnya += 1
-        p["status"] = "terkirim"
-        p["riwayat"].append({"status": "terkirim", "waktu": _sekarang(), "catatan": "Dikirim oleh pelaku usaha"})
-        _catat(p, "pengguna", "Mengirim pengajuan")
-        return p
+        return kirim_draf(pengajuan_id)
 
 
 @router.get("/api/sihalal/pengajuan/{pengajuan_id}/dokumen/{jenis}")

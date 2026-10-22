@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 
 from agent import CATATAN_DISCLAIMER, KawalHalalAgent, process_in_background
 import db
+from routers.agent_chat import router as agent_router
 from routers.dev_ingest import router as dev_router
 from routers.meta_webhook import router as meta_router
 from routers.mockup import router as mockup_router
@@ -40,6 +41,7 @@ app.include_router(sihalal_router)
 app.include_router(meta_router)
 app.include_router(dev_router)
 app.include_router(mockup_router)
+app.include_router(agent_router)
 
 agent = KawalHalalAgent()
 

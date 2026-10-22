@@ -4,7 +4,7 @@ import { Navigate, useLocation, useNavigate } from "react-router";
 import { IconAlertTriangle, IconEye, IconEyeOff, IconInfoCircle } from "@tabler/icons-react";
 import { MockBanner } from "../components/kawal/MockBanner.tsx";
 import { Button, Field, IconButton, Input, hintId, useToast } from "../components/ui/index.ts";
-import { AKUN_DEMO, ambilSesi, masuk } from "../lib/sesi.ts";
+import { AKUN_DEMO, ambilSesi, masuk, masukDariServer } from "../lib/sesi.ts";
 
 const langkah = [
   "Lengkapi data pelaku usaha dan ajukan permohonan",
@@ -28,12 +28,12 @@ export default function Login() {
   const galatPengguna = dicoba && !pengguna.trim() ? "Username atau email belum diisi." : undefined;
   const galatPassword = dicoba && !password ? "Password belum diisi." : undefined;
 
-  const kirim = (e: FormEvent) => {
+  const kirim = async (e: FormEvent) => {
     e.preventDefault();
     setDicoba(true);
     setGagal(false);
     if (!pengguna.trim() || !password) return;
-    if (masuk(pengguna, password)) navigate(tujuan, { replace: true });
+    if (masuk(pengguna, password) || (await masukDariServer(pengguna, password))) navigate(tujuan, { replace: true });
     else setGagal(true);
   };
 
