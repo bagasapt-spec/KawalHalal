@@ -112,7 +112,8 @@ def ganti_model(model) -> None:
 
 
 def agen_aktif() -> bool:
-    return bool(os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or os.getenv("GOOGLE_GENAI_USE_VERTEXAI"))
+    vertex = (os.getenv("GOOGLE_GENAI_USE_ENTERPRISE") or os.getenv("GOOGLE_GENAI_USE_VERTEXAI") or "").strip().lower() in ("1", "true")
+    return bool(os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or vertex)
 
 
 def _nama_aman(nama: str) -> str:

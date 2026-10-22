@@ -221,3 +221,5 @@ __marimo__/
 # Local skills workspace
 .agents/
 skills-lock.json
+
+.cloudrun-env.yaml

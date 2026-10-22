@@ -1,6 +1,8 @@
 ﻿"""FastAPI app KawalHalal."""
 import logging
 import os
+import re
+from pathlib import Path
 import httpx
 from dotenv import load_dotenv
 
@@ -11,6 +13,8 @@ from typing import List, Literal, Optional
 from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Response, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from agent import CATATAN_DISCLAIMER, KawalHalalAgent, process_in_background
@@ -26,6 +30,9 @@ from tools import cek_sertifikat_bpjph
 TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
 
+logging.basicConfig(level=logging.INFO, format="%(levelname)s [%(name)s] %(message)s")
+# URL Telegram memuat token bot; log httpx mencetak URL lengkap, jadi jangan tampilkan permintaan sukses.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger("kawalhalal")
 
 app = FastAPI(title="KawalHalal API")
@@ -42,6 +49,18 @@ app.include_router(meta_router)
 app.include_router(dev_router)
 app.include_router(mockup_router)
 app.include_router(agent_router)
+
+
+@app.on_event("startup")
+async def mulai_bot_telegram():
+    """Bot Telegram berjalan di proses yang sama supaya data mock SIHALAL di memori terlihat oleh frontend."""
+    from services import telegram_bot
+
+    if telegram_bot.aktif():
+        from kawal_agent.agent import kirim_ke_loop_agen
+
+        kirim_ke_loop_agen(telegram_bot.polling())
+        logger.info("Bot Telegram dijadwalkan.")
 
 agent = KawalHalalAgent()
 
@@ -73,8 +92,13 @@ class ScanResponse(BaseModel):
     error: Optional[str] = None
 
 
-@app.get("/")
+FRONTEND_DIST = Path(os.environ.get("FRONTEND_DIST", str(Path(__file__).resolve().parent / "static")))
+
+
+@app.get("/", include_in_schema=False)
 def health():
+    if (FRONTEND_DIST / "index.html").exists():
+        return FileResponse(FRONTEND_DIST / "index.html")
     return {"status": "ok", "service": "KawalHalal", "mode": agent.mode}
 
 
@@ -218,6 +242,14 @@ async def whatsapp_webhook(
         )
 
         # Trigger background agent loop
+        if os.environ.get("TWILIO_REPLY_MODE", "twiml").strip().lower() == "twiml":
+            # Sandbox trial menolak balasan bebas lewat REST (21654): jawab di response webhook.
+            from services.outbound import twiml_pesan
+            from services.wa_agent import balas_sinkron
+
+            bagian = await balas_sinkron(session["id"], warung["id"], re.sub(r"\D", "", wa_number), Body)
+            logger.info("TwiML: %d balasan, awal: %r", len(bagian), (bagian[0][:80] if bagian else None))
+            return Response(content=twiml_pesan(bagian), media_type="application/xml")
         background_tasks.add_task(process_in_background, session["id"], warung["id"])
 
     except Exception as err:
@@ -285,3 +317,18 @@ def get_sihalal_dossier(wa_number: str):
 @app.get("/health")
 def health_check():
     return {"ok": True}
+
+
+# Frontend SIHALAL tiruan (hasil build React) disajikan dari proses yang sama bila ada: satu layanan untuk web dan API.
+if (FRONTEND_DIST / "index.html").exists():
+    if (FRONTEND_DIST / "assets").is_dir():
+        app.mount("/assets", StaticFiles(directory=FRONTEND_DIST / "assets"), name="assets")
+
+    @app.get("/{path:path}", include_in_schema=False)
+    def halaman_spa(path: str):
+        if path.startswith("api/"):
+            raise HTTPException(status_code=404, detail="Not found")
+        berkas = (FRONTEND_DIST / path).resolve()
+        if path and berkas.is_file() and FRONTEND_DIST.resolve() in berkas.parents:
+            return FileResponse(berkas)
+        return FileResponse(FRONTEND_DIST / "index.html")  # rute React (mis. /pengajuan/pj-1)

@@ -1,4 +1,5 @@
 """Pengiriman balasan WhatsApp: Twilio (sandbox) atau Meta Cloud API, dipilih dari awalan id pesan masuk."""
+import json
 import logging
 import os
 import re
@@ -27,6 +28,14 @@ def pecah_pesan(teks: str, batas: int = BATAS_PESAN) -> list[str]:
     return bagian
 
 
+def twiml_pesan(daftar: list[str]) -> str:
+    """Susun TwiML berisi satu <Message> per bagian (teks di-escape, panjang dipecah)."""
+    from xml.sax.saxutils import escape
+
+    isi = "".join(f"<Message>{escape(b)}</Message>" for teks in daftar for b in pecah_pesan(teks))
+    return f"<Response>{isi}</Response>"
+
+
 def saluran_dari_id(msg_id: str) -> str:
     """twilio untuk SM/MM..., meta untuk wamid..., dev untuk simulasi (tidak dikirim ke mana pun)."""
     if (msg_id or "").startswith("dev-"):
@@ -44,14 +53,22 @@ async def _kirim_twilio(ke: str, teks: str) -> bool:
         logger.warning("Twilio tidak dikonfigurasi, balasan tidak dikirim.")
         return False
     tujuan = "whatsapp:+" + re.sub(r"\D", "", ke)
+    data = {"From": dari, "To": tujuan}
+    content_sid = os.environ.get("TWILIO_CONTENT_SID", "").strip()
+    if content_sid:
+        # Sandbox akun trial menolak Body bebas lewat REST (error 21654): kirim sebagai Content Template twilio/text "{{1}}".
+        data["ContentSid"] = content_sid
+        data["ContentVariables"] = json.dumps({"1": teks})
+    else:
+        data["Body"] = teks
     async with httpx.AsyncClient(timeout=15.0) as client:
         r = await client.post(
             f"https://api.twilio.com/2010-04-01/Accounts/{sid}/Messages.json",
-            data={"From": dari, "To": tujuan, "Body": teks},
+            data=data,
             auth=(sid, token),
         )
     if r.status_code >= 300:
-        logger.error("Twilio gagal kirim (%s): %s", r.status_code, r.text[:300])
+        logger.error("Twilio gagal kirim (%s) From=%s To=%s Akun=%s...: %s", r.status_code, dari, tujuan, sid[:6], r.text[:300])
         return False
     return True
 
