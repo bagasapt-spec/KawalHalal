@@ -276,6 +276,19 @@ def lihat_layar(tab: str) -> dict:
 SEMUA_TOOL_OPERATOR = [lihat_rencana, kerjakan_tugas, lihat_layar]
 
 
+def model_override_aktif() -> bool:
+    return _model_override is not None
+
+
+def model_siap_dipanggil(model=None) -> bool:
+    target = model if model is not None else _model_override
+    skrip = getattr(target, "skrip", None)
+    log = getattr(target, "log", None)
+    if isinstance(skrip, list) and isinstance(log, list):
+        return len(log) < len(skrip)
+    return True
+
+
 def model_operator():
     """Ambil model untuk agen operator: override tes -> GEMINI_MODEL_RINGAN -> GEMINI_MODEL."""
     if _model_override is not None:

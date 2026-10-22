@@ -1309,10 +1309,26 @@ def impor_berkas_xlsx(nama_berkas: str, tool_context: ToolContext) -> dict:
 
 # ---------------------------------------------------------------- validasi dan kirim
 def _periksa(tc: ToolContext) -> dict:
+    from . import agen_pemeriksa
+
     st = tc.state
     p = _pengajuan(tc)
     if not p:
-        return {"siap_kirim": False, "harus_diperbaiki": ["Belum ada draf pengajuan."], "peringatan": []}
+        return {
+            "siap_kirim": False,
+            "harus_diperbaiki": ["Belum ada draf pengajuan."],
+            "peringatan": [],
+            "pemeriksa": {
+                "cocok": False,
+                "selisih": [],
+                "laporan": "Belum ada draf pengajuan.",
+                "diulang": False,
+                "selisih_awal": [],
+                "riwayat": [],
+            },
+            "catatan_pemeriksa": "Belum ada draf pengajuan.",
+            "selisih_pemeriksa": [],
+        }
     masalah = list(sinkron.rincian_kurang(p))
     dok = _dok(tc)
     kosong = templates.sel_kosong_wajib(dok, st.get("kategori"))
@@ -1327,8 +1343,26 @@ def _periksa(tc: ToolContext) -> dict:
         masalah.append("Bahan belum dimasukkan karena menunggu keputusan pengguna: " + ", ".join(ditahan) + ".")
     if p["status"] != "draf" and p["status"] != "dikembalikan":
         masalah.append(f"Pengajuan sudah berstatus {p['status']}.")
-    return {"siap_kirim": not masalah, "harus_diperbaiki": masalah, "peringatan": peringatan,
-            "kelengkapan": {k: f"{v['done']}/{v['total']}" for k, v in sm.hitung_kelengkapan(p).items()}}
+    pid = st.get("pengajuan_id") or ""
+    info_pemeriksa = agen_pemeriksa.periksa_untuk_kala(
+        st,
+        pengajuan_live=p,
+        hasil_tercatat=operator_ui.hasil_pemeriksa(pid) if pid else None,
+        riwayat_op=operator_ui.riwayat(pid) if pid else None,
+    )
+    for item_selisih in info_pemeriksa["selisih"]:
+        catatan = f"Pemeriksa: {item_selisih}" if not str(item_selisih).lower().startswith("pemeriksa") else str(item_selisih)
+        if catatan not in masalah:
+            masalah.append(catatan)
+    return {
+        "siap_kirim": not masalah,
+        "harus_diperbaiki": masalah,
+        "peringatan": peringatan,
+        "kelengkapan": {k: f"{v['done']}/{v['total']}" for k, v in sm.hitung_kelengkapan(p).items()},
+        "pemeriksa": info_pemeriksa,
+        "catatan_pemeriksa": info_pemeriksa["laporan"],
+        "selisih_pemeriksa": info_pemeriksa["selisih"],
+    }
 
 
 def periksa_pengajuan(tool_context: ToolContext) -> dict:
