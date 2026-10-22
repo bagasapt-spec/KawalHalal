@@ -26,6 +26,7 @@ from routers.dev_ingest import router as dev_router
 from routers.meta_webhook import router as meta_router
 from routers.mockup import router as mockup_router
 from services.storage import upload_media
+from services.waha import router as waha_router
 from sihalal_mock import TOOLS_SIHALAL, router as sihalal_router
 
 TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
@@ -50,6 +51,7 @@ app.include_router(meta_router)
 app.include_router(dev_router)
 app.include_router(mockup_router)
 app.include_router(agent_router)
+app.include_router(waha_router)
 
 
 @app.on_event("startup")
@@ -348,15 +350,20 @@ def health_check():
 
 
 # Frontend SIHALAL tiruan (hasil build React) disajikan dari proses yang sama bila ada: satu layanan untuk web dan API.
-if (FRONTEND_DIST / "index.html").exists():
-    if (FRONTEND_DIST / "assets").is_dir():
-        app.mount("/assets", StaticFiles(directory=FRONTEND_DIST / "assets"), name="assets")
+def sajikan_frontend(dist: Path) -> None:
+    if not (dist / "index.html").exists():
+        return
+    if (dist / "assets").is_dir():
+        app.mount("/assets", StaticFiles(directory=dist / "assets"), name="assets")
 
     @app.get("/{path:path}", include_in_schema=False)
     def halaman_spa(path: str):
         if path.startswith("api/"):
             raise HTTPException(status_code=404, detail="Not found")
-        berkas = (FRONTEND_DIST / path).resolve()
-        if path and berkas.is_file() and FRONTEND_DIST.resolve() in berkas.parents:
+        berkas = (dist / path).resolve()
+        if path and berkas.is_file() and dist.resolve() in berkas.parents:
             return FileResponse(berkas)
-        return FileResponse(FRONTEND_DIST / "index.html")  # rute React (mis. /pengajuan/pj-1)
+        return FileResponse(dist / "index.html")  # rute React (mis. /pengajuan/pj-1)
+
+
+sajikan_frontend(FRONTEND_DIST)
