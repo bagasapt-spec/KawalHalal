@@ -104,3 +104,91 @@ def test_pecah_pesan_dan_pemilihan_saluran():
     assert "".join(b.replace(" ", "") for b in bagian) == panjang.replace(" ", "")
     assert outbound.pecah_pesan("") == [] and outbound.pecah_pesan("pendek") == ["pendek"]
     assert [outbound.saluran_dari_id(x) for x in ("SM1", "MM2", "wamid.A", "dev-123")] == ["twilio", "twilio", "meta", "dev"]
+
+
+def test_twilio_memakai_content_template_bila_diatur(monkeypatch):
+    dikirim = {}
+
+    class Resp:
+        status_code = 201
+        text = ""
+
+    class Klien:
+        def __init__(self, *a, **k): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        async def post(self, url, data=None, auth=None):
+            dikirim["data"] = data
+            return Resp()
+
+    monkeypatch.setattr(outbound.httpx, "AsyncClient", Klien)
+    monkeypatch.setenv("TWILIO_ACCOUNT_SID", "ACx")
+    monkeypatch.setenv("TWILIO_AUTH_TOKEN", "t")
+    monkeypatch.setenv("TWILIO_WHATSAPP_FROM", "whatsapp:+17372508034")
+    monkeypatch.delenv("TWILIO_CONTENT_SID", raising=False)
+    assert asyncio.run(outbound._kirim_twilio("+62 821-1472-8750", "halo")) is True
+    assert dikirim["data"] == {"From": "whatsapp:+17372508034", "To": "whatsapp:+6282114728750", "Body": "halo"}
+    monkeypatch.setenv("TWILIO_CONTENT_SID", "HX123")
+    asyncio.run(outbound._kirim_twilio("6282114728750", "baris1\nbaris2"))
+    assert dikirim["data"]["ContentSid"] == "HX123" and "Body" not in dikirim["data"]
+    assert __import__("json").loads(dikirim["data"]["ContentVariables"]) == {"1": "baris1\nbaris2"}
+
+
+def test_twiml_escape_dan_pecah():
+    x = outbound.twiml_pesan(["Bahan: <gelatin> & garam", ""])
+    assert x == "<Response><Message>Bahan: &lt;gelatin&gt; &amp; garam</Message></Response>"
+    assert outbound.twiml_pesan([]) == "<Response></Response>"
+    panjang = outbound.twiml_pesan([("Kalimat. " * 400)])
+    assert panjang.count("<Message>") > 1
+
+
+def _atur_susun(monkeypatch, jeda, balasan="Jawaban agen"):
+    async def susun(session_id, warung_id):
+        await asyncio.sleep(jeda)
+        return balasan, "SM1", "62811"
+
+    monkeypatch.setattr(wa_agent, "_susun_balasan", susun)
+    wa_agent._tertunda.clear()
+
+
+def test_balas_sinkron_cepat(monkeypatch):
+    _atur_susun(monkeypatch, 0)
+    assert asyncio.run(wa_agent.balas_sinkron("s", "w", "62811", "halo")) == ["Jawaban agen"]
+
+
+def test_balas_sinkron_lambat_ditahan_lalu_diambil(monkeypatch):
+    _atur_susun(monkeypatch, 0.4)
+
+    async def alur():
+        a = await wa_agent.balas_sinkron("s", "w", "62811", "bahan saya banyak", batas=0.05)
+        assert a == [wa_agent.PESAN_TUNGGU]
+        b = await wa_agent.balas_sinkron("s", "w", "62811", "lanjut", batas=0.05)  # belum selesai
+        assert "masih diproses" in b[0]
+        await asyncio.sleep(0.6)
+        return await wa_agent.balas_sinkron("s", "w", "62811", "lanjut", batas=0.05)
+
+    assert asyncio.run(alur()) == ["Jawaban agen"]
+
+
+def test_pesan_baru_setelah_hasil_tertunda_digabung(monkeypatch):
+    _atur_susun(monkeypatch, 0.2, "Hasil lama")
+
+    async def alur():
+        await wa_agent.balas_sinkron("s", "w", "62811", "satu", batas=0.01)
+        await asyncio.sleep(0.4)
+        _atur_susun_baru = None
+        async def susun2(session_id, warung_id):
+            return "Hasil baru", "SM2", "62811"
+        monkeypatch.setattr(wa_agent, "_susun_balasan", susun2)
+        return await wa_agent.balas_sinkron("s", "w", "62811", "tepung tapioka dan garam")
+
+    assert asyncio.run(alur()) == ["Hasil lama", "Hasil baru"]
+
+
+def test_balas_sinkron_galat_agen_tidak_menjatuhkan_webhook(monkeypatch):
+    async def rusak(session_id, warung_id):
+        raise RuntimeError("DB mati")
+
+    monkeypatch.setattr(wa_agent, "_susun_balasan", rusak)
+    wa_agent._tertunda.clear()
+    assert "gangguan" in asyncio.run(wa_agent.balas_sinkron("s", "w", "62811", "halo"))[0]

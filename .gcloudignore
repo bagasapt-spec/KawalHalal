@@ -1,0 +1,16 @@
+.git
+.gitignore
+.agents
+**/node_modules
+**/.venv
+**/venv
+**/__pycache__
+**/.pytest_cache
+backend/.env
+backend/.env.*
+backend/generated
+backend/tests
+.cloudrun-env.yaml
+sihalal_references
+docs
+*.md

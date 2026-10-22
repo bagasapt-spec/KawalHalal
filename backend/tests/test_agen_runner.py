@@ -130,5 +130,6 @@ def test_tanpa_kunci_model_jujur_tidak_pura_pura(monkeypatch):
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
     monkeypatch.delenv("GOOGLE_GENAI_USE_VERTEXAI", raising=False)
+    monkeypatch.delenv("GOOGLE_GENAI_USE_ENTERPRISE", raising=False)
     r = jalan("+628115", "halo")
     assert r["aktif"] is False and "belum aktif" in r["balasan"]

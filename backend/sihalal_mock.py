@@ -90,6 +90,8 @@ def muat_seed() -> None:
         _pelaku_usaha = json.load(f)
     with open(pengajuan_file, encoding="utf-8") as f:
         _pengajuan = json.load(f)
+    if os.getenv("SIHALAL_SEED", "kosong").strip().lower() != "contoh":
+        _pengajuan = []  # mulai kosong supaya daftar hanya berisi pengajuan buatan agen; SIHALAL_SEED=contoh memuat data contoh
     _nomor_berikutnya = 143
 
 
