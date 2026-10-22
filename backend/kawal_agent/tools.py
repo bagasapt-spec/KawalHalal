@@ -344,9 +344,23 @@ def _simpan(tc: ToolContext, dok: dict) -> None:
 
 
 def _sinkron(tc: ToolContext) -> dict:
+    pid = tc.state.get("pengajuan_id") or ""
+    url_p = tautan.url_pengajuan(pid) if pid else ""
     if operator_ui.aktif():
-        return operator_ui.serahkan(tc.state, _ref(tc))
-    return sinkron.sinkron(tc.state, _ref(tc))
+        h = operator_ui.serahkan(tc.state, _ref(tc))
+        tc.state["status_operator_terakhir"] = {
+            "mode": "operator_ui",
+            "dijadwalkan": bool(h.get("disinkronkan")),
+            "pesan": h.get("pesan") or "",
+        }
+        if url_p:
+            h = {**h, "url_pengajuan": url_p, "tautan_pengajuan": url_p}
+        return h
+    tc.state["status_operator_terakhir"] = None
+    h = sinkron.sinkron(tc.state, _ref(tc))
+    if url_p:
+        h = {**h, "url_pengajuan": url_p, "tautan_pengajuan": url_p}
+    return h
 
 
 def _tanggal_valid(t: str) -> bool:
@@ -416,10 +430,35 @@ def lihat_progres(tool_context: ToolContext) -> dict:
     Returns:
         dict berisi kategori, langkah, langkah_berikutnya, keputusan_terakhir, menunggu_konfirmasi, kelengkapan.
     """
+    from . import agen_pemeriksa
+
     st = tool_context.state
     dok = _dok(tool_context)
+    pid = st.get("pengajuan_id") or ""
+    sedang_bekerja = operator_ui.sibuk(pid) if pid else False
     p = _pengajuan(tool_context)
-    kurang = sinkron.rincian_kurang(p) if p else []
+    kurang = list(sinkron.rincian_kurang(p)) if p else []
+    riwayat_op = operator_ui.riwayat(pid) if pid else []
+    hasil_pm = (
+        agen_pemeriksa.periksa_untuk_kala(
+            st,
+            pengajuan_live=p,
+            hasil_tercatat=operator_ui.hasil_pemeriksa(pid),
+            riwayat_op=riwayat_op,
+        )
+        if p
+        else (operator_ui.hasil_pemeriksa(pid) if pid else None)
+    )
+    selisih_pm = list((hasil_pm or {}).get("selisih") or [])
+    catatan_pm = str((hasil_pm or {}).get("laporan") or "")
+    for item_selisih in selisih_pm:
+        catatan = f"Pemeriksa: {item_selisih}" if not str(item_selisih).lower().startswith("pemeriksa") else str(item_selisih)
+        if catatan not in kurang:
+            kurang.append(catatan)
+    st["riwayat_operator"] = riwayat_op
+    st["hasil_pemeriksa"] = hasil_pm
+    if not sedang_bekerja:
+        st["status_operator_terakhir"] = None
     langkah = [
         ("Pilih kategori produk", bool(st.get("kategori"))),
         ("Daftarkan akun SIHALAL", bool(st.get("akun"))),
@@ -431,13 +470,21 @@ def lihat_progres(tool_context: ToolContext) -> dict:
         ("Isi proses produksi", bool(dok["proses"]) and bool(dok["penyimpanan"]) and bool(dok["hasil"]) and bool(dok["distribusi"])),
         ("Setujui pernyataan komitmen", all(k in (st.get("persetujuan") or {}) for k in TEKS_PERNYATAAN)),
         ("Lampirkan foto layout dan dokumen bertanda tangan", bool((st.get("lampiran") or {}).get("layout")) and bool((st.get("lampiran") or {}).get("tanda_tangan_pj"))),
-        ("Periksa pengajuan lalu kirim", bool(p) and p["status"] != "draf"),
+        ("Periksa pengajuan lalu kirim", bool(p) and p["status"] != "draf" and not selisih_pm),
     ]
     berikut = next((nama for nama, ok in langkah if not ok), "Selesai")
+    status_op = (
+        "sedang_bekerja"
+        if sedang_bekerja
+        else ("ada_selisih" if selisih_pm else ("selesai" if hasil_pm else ("aktif" if operator_ui.aktif() else "sinkron_langsung")))
+    )
+    url_p = tautan.url_pengajuan(pid) if pid else ""
     hasil = {
         "kategori": st.get("kategori"),
         "akun": (st.get("akun") or {}).get("username"),
         "pengajuan_id": st.get("pengajuan_id"),
+        "url_pengajuan": url_p,
+        "tautan_pengajuan": url_p,
         "jalur": st.get("jalur"),
         "langkah": [{"langkah": n, "selesai": ok} for n, ok in langkah],
         "langkah_berikutnya": berikut,
@@ -446,6 +493,11 @@ def lihat_progres(tool_context: ToolContext) -> dict:
         "keputusan_terakhir": st.get("keputusan_terakhir"),
         "bahan_menunggu_konfirmasi": [b["nama"] for b in _bahan_bermasalah(tool_context)],
         "berkas_dari_pengguna": [b["nama"] for b in (st.get("berkas_masuk") or [])],
+        "status_operator": status_op,
+        "riwayat_operator": riwayat_op,
+        "pemeriksa": hasil_pm,
+        "catatan_pemeriksa": catatan_pm,
+        "selisih_pemeriksa": selisih_pm,
     }
     if not st.get("kategori"):
         hasil["pilihan_kategori"] = [{"nomor": i, **k} for i, k in enumerate(daftar_kategori(), start=1)]
@@ -564,7 +616,8 @@ def buat_draf_pengajuan(jalur: str, tool_context: ToolContext) -> dict:
     """
     st = tool_context.state
     if st.get("pengajuan_id"):
-        return {"status": "sudah_ada", "pengajuan_id": st["pengajuan_id"]}
+        url_p = tautan.url_pengajuan(st["pengajuan_id"])
+        return {"status": "sudah_ada", "pengajuan_id": st["pengajuan_id"], "url_pengajuan": url_p, "tautan_pengajuan": url_p}
     if not st.get("kategori") or not st.get("akun"):
         return {"status": "belum_siap", "pesan": "Pilih kategori dan daftarkan akun SIHALAL dulu."}
     if jalur not in ("self-declare", "reguler"):
@@ -588,7 +641,8 @@ def buat_draf_pengajuan(jalur: str, tool_context: ToolContext) -> dict:
         pid = p["id"]
     st["pengajuan_id"] = pid
     st["jalur"] = jalur
-    return {"status": "dibuat", "pengajuan_id": pid, **_sinkron(tool_context)}
+    url_p = tautan.url_pengajuan(pid)
+    return {"status": "dibuat", "pengajuan_id": pid, "url_pengajuan": url_p, "tautan_pengajuan": url_p, **_sinkron(tool_context)}
 
 
 def isi_data_pengajuan(field: str, nilai: str, tool_context: ToolContext) -> dict:
@@ -784,6 +838,9 @@ def tambah_bahan(
         "sumber_data": v["sumber_data"],
         "kelengkapan": sk.get("kelengkapan"),
     }
+    if sk.get("mode") == "operator_ui":
+        hasil["mode"] = "operator_ui"
+        hasil["pesan_operator"] = sk.get("pesan", "")
     if v["verdict"] == "perlu_tindak_lanjut":
         # Permintaan konfirmasi dicatat oleh sistem, bukan bergantung pada model: balasan YA berikutnya pasti diproses.
         ditahan = _bahan_bermasalah(tool_context)
@@ -1354,6 +1411,10 @@ def _periksa(tc: ToolContext) -> dict:
         catatan = f"Pemeriksa: {item_selisih}" if not str(item_selisih).lower().startswith("pemeriksa") else str(item_selisih)
         if catatan not in masalah:
             masalah.append(catatan)
+    st["hasil_pemeriksa"] = info_pemeriksa
+    st["riwayat_operator"] = info_pemeriksa.get("riwayat", [])
+    st["status_operator_terakhir"] = None
+    url_p = tautan.url_pengajuan(pid) if pid else ""
     return {
         "siap_kirim": not masalah,
         "harus_diperbaiki": masalah,
@@ -1362,6 +1423,9 @@ def _periksa(tc: ToolContext) -> dict:
         "pemeriksa": info_pemeriksa,
         "catatan_pemeriksa": info_pemeriksa["laporan"],
         "selisih_pemeriksa": info_pemeriksa["selisih"],
+        "riwayat_operator": info_pemeriksa.get("riwayat", []),
+        "url_pengajuan": url_p,
+        "tautan_pengajuan": url_p,
     }
 
 
@@ -1392,15 +1456,34 @@ def kirim_pengajuan_sihalal(tool_context: ToolContext) -> dict:
         if cek["peringatan"]:
             ringkasan += " Catatan bukti yang masih belum lengkap: " + " | ".join(cek["peringatan"])
         return gates.minta(st, "kirim_pengajuan", ringkasan, tool_context.invocation_id or "", fp)
-    with sm._kunci:
+    pid = st["pengajuan_id"]
+    if operator_ui.aktif():
+        st["kirim_pengajuan"] = True
         try:
-            p = sm.kirim_draf(st["pengajuan_id"], pelaku="kawalhalal", catatan="Dikirim KawalHalal atas konfirmasi pelaku usaha")
-        except HTTPException as e:
-            return {"status": "gagal", "pesan": e.detail}
+            operator_ui.serahkan(st, _ref(tool_context))
+            operator_ui.tunggu(pid)
+        finally:
+            st["kirim_pengajuan"] = False
+    with sm._kunci:
+        p_kini = sm._cari(pid)
+        if p_kini.get("status") == "terkirim":
+            p = p_kini
+        else:
+            try:
+                p = sm.kirim_draf(pid, pelaku="kawalhalal", catatan="Dikirim KawalHalal atas konfirmasi pelaku usaha")
+            except HTTPException as e:
+                return {"status": "gagal", "pesan": e.detail}
         nomor = p["nomorDaftar"]
     gates.cabut(st, "kirim_pengajuan")
-    return {"status": "terkirim", "nomor_daftar": nomor, "peringatan": cek["peringatan"],
-            "pesan": "Pengajuan terkirim. Sampaikan nomor daftar. Ingatkan bahwa verifikasi, sidang fatwa, dan penetapan dilakukan pihak resmi, bukan KawalHalal."}
+    url_p = tautan.url_pengajuan(pid)
+    return {
+        "status": "terkirim",
+        "nomor_daftar": nomor,
+        "url_pengajuan": url_p,
+        "tautan_pengajuan": url_p,
+        "peringatan": cek["peringatan"],
+        "pesan": f"Pengajuan terkirim. Sampaikan nomor daftar dan tautan peninjauan web ({url_p}). Ingatkan bahwa verifikasi, sidang fatwa, dan penetapan dilakukan pihak resmi, bukan KawalHalal.",
+    }
 
 
 SEMUA_TOOL = [

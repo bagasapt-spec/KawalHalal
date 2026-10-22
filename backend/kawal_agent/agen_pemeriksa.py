@@ -116,7 +116,7 @@ def bandingkan(state: dict, live: dict) -> list[str]:
             ):
                 selisih.append(f"unmapped: Produk '{nama_p}' belum dipetakan ke fasilitas pabrik di SIHALAL.")
 
-    # Periksa langkah formulir lain dari rencana operator (pembelian, pemeriksaan, komitmen, anggota)
+    # Periksa langkah formulir lain dari rencana operator (pembelian, pemeriksaan, komitmen, anggota, proses, dokumen)
     for t in operator_ui.rencana(state or {}, live):
         aksi = t.get("aksi")
         if aksi == "pembelian":
@@ -129,6 +129,22 @@ def bandingkan(state: dict, live: dict) -> list[str]:
             selisih.append(f"missing: Anggota tim halal '{t.get('nama')}' belum masuk di SIHALAL.")
         elif aksi == "setuju_bebas_babi":
             selisih.append("missing: Pernyataan bebas babi belum disetujui di SIHALAL.")
+        elif aksi == "unggah_layout":
+            selisih.append(f"missing: Dokumen layout/denah ruang produksi '{t.get('nama')}' belum terunggah di SIHALAL.")
+        elif aksi == "penyimpanan":
+            selisih.append(f"missing: Catatan penyimpanan {t.get('jenis')} '{t.get('item')}' belum tercatat di SIHALAL.")
+        elif aksi == "alur_proses":
+            selisih.append(f"missing: Alur proses produksi '{t.get('judul')}' belum tercatat di SIHALAL.")
+        elif aksi == "hasil_produksi":
+            selisih.append(f"missing: Catatan hasil produksi '{t.get('produk')}' belum tercatat di SIHALAL.")
+        elif aksi == "distribusi":
+            selisih.append(f"missing: Catatan distribusi '{t.get('produk')}' ke '{t.get('tujuan')}' belum tercatat di SIHALAL.")
+        elif aksi == "tanda_tangan":
+            selisih.append("missing: Dokumen tanda tangan penanggung jawab dan penyelia halal belum terunggah di SIHALAL.")
+        elif aksi == "dokumen_lain":
+            selisih.append(f"missing: Dokumen pendukung '{t.get('nama')}' belum terunggah di SIHALAL.")
+        elif aksi == "kirim_pengajuan":
+            selisih.append("missing: Pengajuan belum dikirim di SIHALAL.")
 
     return selisih
 
@@ -243,6 +259,8 @@ def baca_tab(tab: str) -> dict:
         }
     elif nama_tab == "komitmen":
         isi = komitmen_obj
+    elif nama_tab in ("pemantauan", "dokumen"):
+        isi = live.get("pemantauan") or {}
     elif nama_tab in live:
         isi = live[nama_tab]
     else:
@@ -251,6 +269,8 @@ def baca_tab(tab: str) -> dict:
             "produk": produk_list,
             "pemetaan": pemetaan_list,
             "komitmen": komitmen_obj,
+            "proses": live.get("proses") or {},
+            "pemantauan": live.get("pemantauan") or {},
         }
 
     selisih = bandingkan(ctx.state, live)
@@ -269,7 +289,7 @@ def niat_kala() -> dict:
     """Baca state dan dokumen yang diserahkan Kala ke operator untuk pengajuan aktif.
 
     Returns:
-        dict berisi pengajuan_id, kategori, daftar bahan yang diinginkan, produk, pembelian, persetujuan, dan anggota tim.
+        dict berisi pengajuan_id, kategori, daftar bahan yang diinginkan, produk, pembelian, proses, persetujuan, anggota tim, dan lampiran.
     """
     ctx = _ambil_konteks()
     st = ctx.state or {}
@@ -282,8 +302,13 @@ def niat_kala() -> dict:
         "bahan": bahan_diinginkan,
         "produk": list(dok.get("produk") or []),
         "pembelian": list(dok.get("pembelian") or []),
+        "proses": list(dok.get("proses") or []),
+        "penyimpanan": list(dok.get("penyimpanan") or []),
+        "hasil": list(dok.get("hasil") or []),
+        "distribusi": list(dok.get("distribusi") or []),
         "persetujuan": list((st.get("persetujuan") or {}).keys()),
         "anggota": list(st.get("anggota") or []),
+        "lampiran": dict(st.get("lampiran") or {}),
     }
 
 

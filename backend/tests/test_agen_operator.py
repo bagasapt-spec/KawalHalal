@@ -89,6 +89,95 @@ class LayarPalsu:
             for pr in self.live["produk"]:
                 if sk._norm(pr["nama"]) == sk._norm(t["produk"]):
                     self.live["pemetaan"].append({"id": f"pm-{pr['id']}", "produkId": pr["id"], "pabrikId": pabrik_id})
+        elif aksi == "pembelian":
+            for b in self.live["bahan"]["daftarBahan"]:
+                if sk._norm(b["nama"]) == sk._norm(t["bahan"]):
+                    self.live["bahan"]["catatanPembelian"].append({
+                        "id": f"cp-{b['id']}",
+                        "bahanId": b["id"],
+                        "namaBahan": b["nama"],
+                        "jumlah": t["jumlah"],
+                        "satuan": t["satuan"],
+                        "tanggal": t["tanggal"],
+                    })
+        elif aksi == "pemeriksaan":
+            for b in self.live["bahan"]["daftarBahan"]:
+                if sk._norm(b["nama"]) == sk._norm(t["bahan"]):
+                    self.live["bahan"]["pemeriksaan"].append({
+                        "id": f"pmk-{b['id']}",
+                        "bahanId": b["id"],
+                        "namaBahan": b["nama"],
+                        "lokasi": t["lokasi"],
+                        "tanggal": t["tanggal"],
+                    })
+        elif aksi == "setuju_komitmen":
+            self.live["komitmen"][t["id"]] = {"disetujuiPada": "2026-10-21T10:00:00+07:00"}
+        elif aksi == "anggota_tambah":
+            self.live["komitmen"]["anggota"].append({
+                "id": f"ag-{len(self.live['komitmen']['anggota']) + 1}",
+                "nama": t["nama"],
+                "jabatan": t["jabatan"],
+                "posisi": t["posisi"],
+            })
+        elif aksi == "setuju_bebas_babi":
+            self.live.setdefault("proses", {})["pernyataanBebasBabi"] = {"disetujuiPada": "2026-10-21T10:00:00+07:00"}
+        elif aksi == "unggah_layout":
+            pabrik_id = (self.live["data"].get("pabrikIds") or ["pb-1"])[0]
+            self.live.setdefault("proses", {}).setdefault("layout", []).append({
+                "id": "ly-1",
+                "pabrikId": pabrik_id,
+                "berkas": {"nama": t["nama"]},
+            })
+        elif aksi == "penyimpanan":
+            self.live.setdefault("proses", {}).setdefault("penyimpanan", []).append({
+                "id": f"ps-{len(self.live.get('proses', {}).get('penyimpanan', [])) + 1}",
+                "jenis": t["jenis"],
+                "refId": "ref-1",
+                "namaRef": t["item"],
+                "jumlah": t["jumlah"],
+                "tanggalMasuk": t["tanggal_masuk"],
+            })
+        elif aksi == "alur_proses":
+            self.live.setdefault("proses", {}).setdefault("alurProses", []).append({
+                "id": f"ap-{len(self.live.get('proses', {}).get('alurProses', [])) + 1}",
+                "judul": t["judul"],
+                "mode": "tulis",
+                "langkah": list(t["langkah"]),
+                "berkas": None,
+            })
+        elif aksi == "hasil_produksi":
+            self.live.setdefault("proses", {}).setdefault("hasilProduksi", []).append({
+                "id": f"hp-{len(self.live.get('proses', {}).get('hasilProduksi', [])) + 1}",
+                "produkId": "p-1",
+                "namaProduk": t["produk"],
+                "jumlah": t["jumlah"],
+                "tanggalProduksi": t["tanggal_produksi"],
+            })
+        elif aksi == "distribusi":
+            self.live.setdefault("proses", {}).setdefault("distribusi", []).append({
+                "id": f"ds-{len(self.live.get('proses', {}).get('distribusi', [])) + 1}",
+                "tujuan": t["tujuan"],
+                "produkId": "p-1",
+                "namaProduk": t["produk"],
+                "jumlah": t["jumlah"],
+                "tanggal": t["tanggal"],
+            })
+        elif aksi == "tanda_tangan":
+            self.live.setdefault("pemantauan", {}).setdefault("tandaTangan", []).append({
+                "id": "tt-1",
+                "penanggungJawab": {"nama": t["pj"]},
+                "penyeliaId": "py-1",
+                "penyelia": {"nama": t.get("penyelia") or t["pj"]},
+            })
+        elif aksi == "dokumen_lain":
+            self.live.setdefault("pemantauan", {}).setdefault("dokumenLain", []).append({
+                "id": f"dl-{len(self.live.get('pemantauan', {}).get('dokumenLain', [])) + 1}",
+                "nama": t["nama"],
+                "berkas": {"nama": t.get("berkas") or t["nama"]},
+            })
+        elif aksi == "kirim_pengajuan":
+            self.live["status"] = "terkirim"
+            self.live["nomorDaftar"] = "SH2026-1-999999"
 
 
 @pytest.fixture(autouse=True)
@@ -286,3 +375,79 @@ def test_pekerja_operator_ui_integrasi_agen_dan_fallback_429(monkeypatch):
     assert layar_429.live["pemetaan"] != []
     assert [t["aksi"] for t in layar_429.dikerjakan] == ["bahan_tambah", "produk_tambah", "input_bahan", "petakan"]
     assert any("beralih ke pelaksana deterministik" in baris for baris in pekerja_429.riwayat(pid))
+
+
+def test_agen_operator_mengeksekusi_tab_proses_dokumen_dan_kirim_pengajuan():
+    state, live = _siapkan_state_dan_live()
+    state["dok"]["proses"] = [{"judul": "Pembuatan bakso", "langkah": "Giling daging; Bulatkan; Rebus"}]
+    state["dok"]["penyimpanan"] = [
+        {"item": "Kecap manis", "jenis": "bahan", "jumlah": 5, "tanggal_masuk": "2026-10-20"},
+        {"item": "Bakso Sapi", "jenis": "produk", "jumlah": 20, "tanggal_masuk": "2026-10-21"},
+    ]
+    state["dok"]["hasil"] = [{"produk": "Bakso Sapi", "jumlah": 100, "tanggal_produksi": "2026-10-21"}]
+    state["dok"]["distribusi"] = [{"tujuan": "Warung Depan", "produk": "Bakso Sapi", "jumlah": 50, "tanggal": "2026-10-22"}]
+    state["lampiran"] = {
+        "layout": {"nama": "denah_dapur.jpg", "url": "/api/agent/berkas/anon/denah_dapur.jpg"},
+        "tanda_tangan_pj": {"nama": "ttd_pj.png", "url": "/api/agent/berkas/anon/ttd_pj.png"},
+        "tanda_tangan_penyelia": {"nama": "ttd_penyelia.png", "url": "/api/agent/berkas/anon/ttd_penyelia.png"},
+    }
+    state["kirim_pengajuan"] = True
+
+    daftar_rencana = operator_ui.rencana(state, live)
+    aksi_rencana = [t["aksi"] for t in daftar_rencana]
+    assert "unggah_layout" in aksi_rencana
+    assert "penyimpanan" in aksi_rencana
+    assert "alur_proses" in aksi_rencana
+    assert "hasil_produksi" in aksi_rencana
+    assert "distribusi" in aksi_rencana
+    assert "tanda_tangan" in aksi_rencana
+    assert aksi_rencana[-1] == "kirim_pengajuan"
+
+    layar = LayarPalsu(live)
+    langkah_skrip = [lambda r: panggil("lihat_rencana")]
+    for idx in range(1, len(daftar_rencana) + 1):
+        langkah_skrip.append(lambda r, n=idx: panggil("kerjakan_tugas", nomor=n))
+    langkah_skrip.append(lambda r: teks("Seluruh isian proses, dokumen, dan kirim pengajuan selesai."))
+
+    AO.ganti_model(LLMTerskrip(skrip=langkah_skrip, log=[]))
+    hasil = asyncio.run(AO.jalankan(state, layar, pid=state["pengajuan_id"]))
+
+    assert hasil["gagal"] == []
+    assert layar.live["proses"]["layout"][0]["berkas"]["nama"] == "denah_dapur.jpg"
+    assert len(layar.live["proses"]["penyimpanan"]) == 2
+    assert layar.live["proses"]["alurProses"][0]["langkah"] == ["Giling daging", "Bulatkan", "Rebus"]
+    assert layar.live["proses"]["hasilProduksi"][0]["jumlah"] == 100
+    assert layar.live["proses"]["distribusi"][0]["tujuan"] == "Warung Depan"
+    assert layar.live["pemantauan"]["tandaTangan"][0]["penanggungJawab"]["nama"] == "ttd_pj.png"
+    assert layar.live["status"] == "terkirim"
+    # Idempotensi: setelah semua selesai dan terkirim, rencana harus kosong
+    assert operator_ui.rencana(state, layar.live) == []
+
+
+def test_tautan_peninjauan_web_di_tools_dan_prompts(monkeypatch):
+    from kawal_agent import prompts, tautan
+    from tests.test_agen_tools import siapkan_draf
+
+    monkeypatch.delenv("SIHALAL_FRONTEND_URL", raising=False)
+    assert tautan.url_frontend() == "https://kawalhalal-demo-96225654727.asia-southeast2.run.app"
+    assert (
+        tautan.url_pengajuan("pj-001")
+        == "https://kawalhalal-demo-96225654727.asia-southeast2.run.app/pengajuan/pj-001"
+    )
+
+    c = siapkan_draf(Ctx())
+    pid = c.state["pengajuan_id"]
+    expected_url = f"https://kawalhalal-demo-96225654727.asia-southeast2.run.app/pengajuan/{pid}"
+
+    prog = T.lihat_progres(c)
+    assert prog["url_pengajuan"] == expected_url
+    assert prog["tautan_pengajuan"] == expected_url
+
+    cek = T.periksa_pengajuan(c)
+    assert cek["url_pengajuan"] == expected_url
+
+    assert "https://kawalhalal-demo-96225654727.asia-southeast2.run.app" in prompts.INSTRUKSI
+    assert "https://kawalhalal-demo-96225654727.asia-southeast2.run.app" in prompts.INSTRUKSI_OPERATOR
+
+    monkeypatch.setenv("SIHALAL_FRONTEND_URL", "https://custom-sihalal.example.com/")
+    assert tautan.url_pengajuan("pj-999") == "https://custom-sihalal.example.com/pengajuan/pj-999"

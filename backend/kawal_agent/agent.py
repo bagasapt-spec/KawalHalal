@@ -856,20 +856,91 @@ class KawalHalalAgent:
 # ------------------------------------------------------------------
 # Runner ADK (Agent Development Kit) & Event Loop Khusus Agen
 # ------------------------------------------------------------------
+_POLA_KLAIM_SELESAI = re.compile(
+    r"\b("
+    r"pengajuan\s+(sudah\s+|telah\s+)?(selesai|lengkap|siap\s+dikirim|siap\s+kirim|beres)|"
+    r"semua\s+(data\s+|isian\s+|formulir\s+)?(sudah\s+|telah\s+)?(lengkap|selesai|tersimpan\s+lengkap|siap\s+dikirim|siap\s+kirim)|"
+    r"formulir\s+(sihalal\s+)?(sudah\s+|telah\s+)?(berhasil\s+tersimpan|terpetakan|selesai|lengkap|siap\s+dikirim)|"
+    r"sudah\s+(berhasil\s+)?(tersimpan\s+dan\s+terpetakan|terpetakan\s+di\s+sihalal)"
+    r")\b",
+    re.IGNORECASE,
+)
+_POLA_SEBUT_OPERATOR = re.compile(
+    r"\b(operator|latar\s+belakang|sedang\s+diisi\w*|sedang\s+menyiapkan|sedang\s+diperiksa|bertahap)\b",
+    re.IGNORECASE,
+)
+
+
+def _klaim_selesai_tanpa_negasi(teks: str) -> bool:
+    for m in _POLA_KLAIM_SELESAI.finditer(teks or ""):
+        konteks = teks[max(0, m.start() - 40) : m.start()]
+        if not _NEGASI.search(konteks):
+            return True
+    return False
+
+
+def _selaraskan_respon_orkestrator(state: dict, teks: Optional[str]) -> tuple[Optional[str], bool]:
+    """Pastikan Kala tidak mendahului status formulir bila operator latar belakang baru dijadwalkan
+    atau bila pemeriksa masih melaporkan selisih."""
+    if not teks:
+        return teks, False
+    pid = (state or {}).get("pengajuan_id") or ""
+    hasil_pm = (state or {}).get("hasil_pemeriksa")
+    if hasil_pm is None and pid:
+        hasil_pm = operator_ui.hasil_pemeriksa(pid)
+    selisih = list((hasil_pm or {}).get("selisih") or [])
+
+    if selisih and _klaim_selesai_tanpa_negasi(teks):
+        ringkas = "; ".join(selisih)
+        return (
+            "Pengajuan belum selesai dan belum siap dikirim karena pemeriksa masih menemukan selisih pada formulir SIHALAL: "
+            f"{ringkas} Mari kita perbaiki bagian yang masih kurang tersebut terlebih dahulu.",
+            True,
+        )
+
+    status_op = (state or {}).get("status_operator_terakhir") or {}
+    if (
+        status_op.get("mode") == "operator_ui"
+        and status_op.get("dijadwalkan")
+        and _klaim_selesai_tanpa_negasi(teks)
+        and not _POLA_SEBUT_OPERATOR.search(teks)
+    ):
+        return (
+            "Operator kami sedang menyiapkan dan mengisi draf di latar belakang pada SIHALAL, lalu draf akan diperiksa oleh pemeriksa. "
+            "Status penyimpanan dan pemetaan baru dapat dipastikan setelah proses pemeriksaan selesai.",
+            True,
+        )
+    return teks, False
+
+
 def _guardrail_keluaran(callback_context, llm_response):
-    """after_model_callback: ganti teks yang menyatakan halal/pasti lolos dengan pesan aman (FR-017)."""
+    """after_model_callback: ganti teks yang menyatakan halal/pasti lolos dengan pesan aman (FR-017),
+    serta jaga keselarasan klaim orkestrator terhadap status operator & pemeriksa."""
     content = getattr(llm_response, "content", None)
     if not content or not content.parts:
         return None
     berubah = False
+    guardrail_halal = False
+    penyelarasan = False
     for part in content.parts:
         if getattr(part, "text", None):
             baru, terpicu = terapkan_guardrail(part.text)
             if terpicu:
                 part.text = baru
                 berubah = True
-    if berubah:
+                guardrail_halal = True
+            else:
+                selaras, diubah_orkestrator = _selaraskan_respon_orkestrator(callback_context.state, part.text)
+                if diubah_orkestrator:
+                    part.text = selaras
+                    berubah = True
+                    penyelarasan = True
+    if guardrail_halal:
         callback_context.state["guardrail_terpicu"] = int(callback_context.state.get("guardrail_terpicu", 0)) + 1
+    if penyelarasan:
+        callback_context.state["penyelarasan_orkestrator"] = (
+            int(callback_context.state.get("penyelarasan_orkestrator", 0)) + 1
+        )
     return llm_response if berubah else None
 
 
@@ -887,6 +958,12 @@ def _awal_giliran(callback_context) -> None:
             sinkron_ke_sihalal(callback_context)
         except Exception as e:  # jangan jatuhkan giliran: model masih bisa memanggil sinkron_ke_sihalal sendiri
             logger.error("Sinkron otomatis setelah persetujuan gagal: %s", e)
+    pid = callback_context.state.get("pengajuan_id") or ""
+    if pid:
+        callback_context.state["riwayat_operator"] = operator_ui.riwayat(pid)
+        hasil_pm = operator_ui.hasil_pemeriksa(pid)
+        if hasil_pm is not None:
+            callback_context.state["hasil_pemeriksa"] = hasil_pm
     return None
 
 

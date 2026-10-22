@@ -4,13 +4,15 @@ SIHALAL asli tidak punya API, jadi operator hanya memakai pintu yang sama dengan
 formulir, menekan tombol. Operator membaca keadaan dari respons yang sama dengan yang dilihat halaman, bukan dari
 penyimpanan internal. Pekerjaan berjalan di latar belakang supaya Kala tetap membalas pengguna.
 
-Aktif bila KALA_OPERATOR=ui. Bagian yang belum punya rutinitas formulir (proses produksi, lampiran) tetap ditulis
-langsung oleh sinkron.sinkron setelah rutinitas formulir selesai.
+Aktif bila KALA_OPERATOR=ui. Seluruh bagian formulir (bahan, produk, pemetaan, komitmen, proses produksi,
+lampiran/tanda tangan, hingga kirim pengajuan) dijalankan melalui elemen halaman web SIHALAL dengan jaring
+pengaman idempoten di sinkron.sinkron.
 """
 import contextlib
 import copy
 import difflib
 import logging
+import mimetypes
 import os
 import re
 import threading
@@ -24,8 +26,27 @@ from .kategori import KATEGORI
 
 logger = logging.getLogger("kawalhalal.operator")
 
-KUNCI_STATE = ("pengajuan_id", "kategori", "dok", "persetujuan", "anggota", "lampiran", "berkas_dibuat", "akun")
-BAGIAN_FORMULIR = frozenset({"bahan", "produk", "pemetaan", "komitmen"})
+KUNCI_STATE = (
+    "pengajuan_id",
+    "kategori",
+    "dok",
+    "persetujuan",
+    "anggota",
+    "lampiran",
+    "berkas_dibuat",
+    "akun",
+    "kirim_pengajuan",
+    "siap_dikirim",
+    "hasil_pemeriksa",
+)
+BAGIAN_FORMULIR = frozenset({"bahan", "produk", "pemetaan", "komitmen", "proses", "pemantauan"})
+
+_PNG_1X1 = (
+    b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
+    b"\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01"
+    b"\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
+)
+_PDF_MINIMAL = b"%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Count 0/Kids[]>>endobj\nxref\n0 3\n0000000000 65535 f \n0000000009 00000 n \n0000000052 00000 n \ntrailer<</Size 3/Root 1 0 R>>\nstartxref\n101\n%%EOF\n"
 
 KLASIFIKASI = {
     "Makanan": ["Produk olahan daging", "Makanan siap saji", "Roti dan kue", "Makanan ringan", "Bumbu dan saus"],
@@ -94,12 +115,21 @@ def _bahan_diinginkan(state: dict) -> list[dict]:
 
 def _live_kosong() -> dict:
     return {
-        "data": {"pabrikIds": []},
+        "status": "draf",
+        "data": {"pabrikIds": [], "penyeliaIds": []},
         "bahan": {"daftarBahan": [], "catatanPembelian": [], "pemeriksaan": []},
         "produk": [],
         "pemetaan": [],
         "komitmen": {"kebijakanHalal": None, "pengertianHalalHaram": None, "praktikSjph": None, "anggota": []},
-        "proses": {"pernyataanBebasBabi": None},
+        "proses": {
+            "pernyataanBebasBabi": None,
+            "layout": [],
+            "penyimpanan": [],
+            "alurProses": [],
+            "hasilProduksi": [],
+            "distribusi": [],
+        },
+        "pemantauan": {"dokumenLain": [], "tandaTangan": []},
     }
 
 
@@ -178,15 +208,125 @@ def rencana(state: dict, live: dict | bool = True) -> list[dict]:
     for a in state.get("anggota") or []:
         if sk._norm(a["nama"]) not in nama_anggota:
             tugas.append({"aksi": "anggota_tambah", "nama": a["nama"], "jabatan": a["jabatan"], "posisi": a["posisi"]})
-    if "bebas_babi" in persetujuan and live["proses"].get("pernyataanBebasBabi") is None:
+
+    proses_live = live.get("proses") or {}
+    if "bebas_babi" in persetujuan and proses_live.get("pernyataanBebasBabi") is None:
         tugas.append({"aksi": "setuju_bebas_babi"})
 
-    pabrik = live["data"].get("pabrikIds") or []
+    lampiran = state.get("lampiran") or {}
+    if lampiran.get("layout") and not (proses_live.get("layout") or []):
+        ly = lampiran["layout"]
+        nama_ly = (ly.get("nama") if isinstance(ly, dict) else str(ly)) or "layout.jpg"
+        tugas.append({
+            "aksi": "unggah_layout",
+            "nama": nama_ly,
+            "url": ly.get("url") if isinstance(ly, dict) else "",
+            "path": ly.get("path") if isinstance(ly, dict) else "",
+        })
+
+    nama_produk_live = {x["id"]: x["nama"] for x in live["produk"] if isinstance(x, dict) and "id" in x}
+    nama_produk_diinginkan = {sk._norm(p["nama"]) for p in produk}
+
+    def _nama_simpan(s: dict) -> str:
+        if s.get("namaRef"):
+            return str(s["namaRef"])
+        rid = s.get("refId") or ""
+        return nama_produk_live.get(rid, "") if s.get("jenis") == "produk" else nama_bahan_live.get(rid, "")
+
+    simpan_live = {(sk._norm(_nama_simpan(s)), s.get("jenis", "bahan")): s for s in (proses_live.get("penyimpanan") or [])}
+    for r in dok.get("penyimpanan", []):
+        nama_item = (r.get("item") or "").strip()
+        jenis_s = "produk" if r.get("jenis") == "produk" else "bahan"
+        tgl_masuk = _tanggal_iso(r.get("tanggal_masuk")) or str(r.get("tanggal_masuk") or "").strip()
+        jml_s = sk._angka(r.get("jumlah"))
+        if not nama_item or jml_s <= 0 or not tgl_masuk:
+            continue
+        if jenis_s == "bahan" and sk._norm(nama_item) not in nama_diinginkan:
+            continue
+        if jenis_s == "produk" and sk._norm(nama_item) not in nama_produk_diinginkan:
+            continue
+        ada_s = simpan_live.get((sk._norm(nama_item), jenis_s))
+        if not ada_s or (sk._angka(ada_s.get("jumlah")), ada_s.get("tanggalMasuk")) != (jml_s, tgl_masuk):
+            tugas.append({"aksi": "penyimpanan", "jenis": jenis_s, "item": nama_item, "jumlah": jml_s, "tanggal_masuk": tgl_masuk})
+
+    alur_live = {sk._norm(a.get("judul", "")): a for a in (proses_live.get("alurProses") or [])}
+    for r in dok.get("proses", []):
+        judul = (r.get("judul") or "").strip()
+        langkah_raw = r.get("langkah") or ""
+        langkah = [x.strip() for x in langkah_raw] if isinstance(langkah_raw, list) else [x.strip() for x in str(langkah_raw).split(";") if x.strip()]
+        if not judul or not langkah:
+            continue
+        ada_a = alur_live.get(sk._norm(judul))
+        if not ada_a or list(ada_a.get("langkah") or []) != langkah:
+            tugas.append({"aksi": "alur_proses", "judul": judul, "langkah": langkah})
+
+    def _nama_prod(item_live: dict) -> str:
+        return str(item_live.get("namaProduk") or nama_produk_live.get(item_live.get("produkId") or "", ""))
+
+    hasil_live = {sk._norm(_nama_prod(h)): h for h in (proses_live.get("hasilProduksi") or [])}
+    for r in dok.get("hasil", []):
+        nama_p = (r.get("produk") or "").strip()
+        tgl_prod = _tanggal_iso(r.get("tanggal_produksi")) or str(r.get("tanggal_produksi") or "").strip()
+        jml_h = sk._angka(r.get("jumlah"))
+        if not nama_p or sk._norm(nama_p) not in nama_produk_diinginkan or jml_h <= 0 or not tgl_prod:
+            continue
+        ada_h = hasil_live.get(sk._norm(nama_p))
+        if not ada_h or (sk._angka(ada_h.get("jumlah")), ada_h.get("tanggalProduksi")) != (jml_h, tgl_prod):
+            tugas.append({"aksi": "hasil_produksi", "produk": nama_p, "jumlah": jml_h, "tanggal_produksi": tgl_prod})
+
+    dist_live = {(sk._norm(d.get("tujuan", "")), sk._norm(_nama_prod(d))): d for d in (proses_live.get("distribusi") or [])}
+    for r in dok.get("distribusi", []):
+        tujuan = (r.get("tujuan") or "").strip()
+        nama_p = (r.get("produk") or "").strip()
+        if not nama_p and produk:
+            nama_p = produk[0]["nama"]
+        tgl_dist = _tanggal_iso(r.get("tanggal")) or datetime.now().date().isoformat()
+        jml_d = sk._angka(r.get("jumlah")) if r.get("jumlah") not in ("", None) else 1
+        if jml_d <= 0:
+            jml_d = 1
+        if not tujuan or not nama_p or sk._norm(nama_p) not in nama_produk_diinginkan:
+            continue
+        ada_d = dist_live.get((sk._norm(tujuan), sk._norm(nama_p)))
+        if not ada_d:
+            tugas.append({"aksi": "distribusi", "tujuan": tujuan, "produk": nama_p, "jumlah": jml_d, "tanggal": tgl_dist})
+
+    pabrik = (live.get("data") or {}).get("pabrikIds") or []
     if pabrik:
         for entri in produk:
             ada = produk_live.get(sk._norm(entri["nama"]))
             if not ada or not any(m["produkId"] == ada["id"] and m["pabrikId"] in pabrik for m in live["pemetaan"]):
                 tugas.append({"aksi": "petakan", "produk": entri["nama"]})
+
+    pemantauan_live = live.get("pemantauan") or {}
+    tt_pj = lampiran.get("tanda_tangan_pj") or lampiran.get("tanda_tangan_penyelia")
+    tt_py = lampiran.get("tanda_tangan_penyelia") or tt_pj
+    if tt_pj and not (pemantauan_live.get("tandaTangan") or []):
+        nama_pj = (tt_pj.get("nama") if isinstance(tt_pj, dict) else str(tt_pj)) or "ttd-pj.png"
+        nama_py = (tt_py.get("nama") if isinstance(tt_py, dict) else str(tt_py)) or nama_pj
+        tugas.append({
+            "aksi": "tanda_tangan",
+            "pj": nama_pj,
+            "penyelia": nama_py,
+            "path_pj": tt_pj.get("path") if isinstance(tt_pj, dict) else "",
+            "path_penyelia": tt_py.get("path") if isinstance(tt_py, dict) else "",
+        })
+
+    dok_lain_live = {sk._norm(d.get("nama", "")) for d in (pemantauan_live.get("dokumenLain") or [])}
+    for b in state.get("berkas_dibuat") or []:
+        nama_b = (b.get("nama") if isinstance(b, dict) else str(b)) or ""
+        if nama_b.lower().endswith(".pdf") and sk._norm(nama_b) not in dok_lain_live:
+            tugas.append({
+                "aksi": "dokumen_lain",
+                "nama": nama_b,
+                "berkas": nama_b,
+                "url": b.get("url") if isinstance(b, dict) else "",
+                "path": b.get("path") if isinstance(b, dict) else "",
+            })
+
+    pemeriksa_ok = not isinstance(state.get("hasil_pemeriksa"), dict) or bool(state["hasil_pemeriksa"].get("cocok", True))
+    if (state.get("kirim_pengajuan") or state.get("siap_dikirim")) and pemeriksa_ok and live.get("status", "draf") in ("draf", "dikembalikan"):
+        tugas.append({"aksi": "kirim_pengajuan"})
+
     return tugas
 
 
@@ -227,6 +367,21 @@ class _Layar:
     def _pilih(self, id_pemicu: str, label: str) -> None:
         self.pg.locator(f"#{id_pemicu}").click()
         self.pg.get_by_role("option", name=label, exact=True).click()
+
+    def _pilih_tidak_peka(self, id_pemicu: str, label: str) -> None:
+        self.pg.locator(f"#{id_pemicu}").click()
+        self.pg.get_by_role("option", name=_persis(label)).first.click()
+
+    def _unggah_berkas(self, id_input: str, nama_berkas: str, path_berkas: str = "") -> None:
+        nama = (nama_berkas or "berkas.png").strip()
+        if path_berkas:
+            p = Path(path_berkas)
+            if p.is_file():
+                self.pg.locator(f"#{id_input}").set_input_files(str(p))
+                return
+        mime = mimetypes.guess_type(nama)[0] or ("application/pdf" if nama.lower().endswith(".pdf") else "image/png")
+        isi = _PDF_MINIMAL if nama.lower().endswith(".pdf") else _PNG_1X1
+        self.pg.locator(f"#{id_input}").set_input_files({"name": nama, "mimeType": mime, "buffer": isi})
 
     def _simpan(self) -> None:
         dlg = self.pg.get_by_role("dialog")
@@ -296,6 +451,48 @@ class _Layar:
             self.buka("proses")
             self.catat("Menyetujui pernyataan bebas babi atas persetujuan pengguna")
             self._setuju("bebas-babi")
+        elif jenis == "unggah_layout":
+            self.buka("proses")
+            self.catat(f"Mengunggah layout ruang produksi {t['nama']}")
+            self._tombol_tambah("Layout atau Denah Ruang Produksi").click()
+            self._unggah_berkas("lp-berkas", t["nama"], t.get("path") or "")
+            self._simpan()
+        elif jenis == "penyimpanan":
+            self.buka("proses")
+            self.catat(f"Mencatat penyimpanan {t['jenis']} {t['item']}")
+            self._tombol_tambah("Catatan Penyimpanan Bahan dan Produk").click()
+            dlg = pg.get_by_role("dialog")
+            if t.get("jenis") == "produk":
+                dlg.get_by_role("radio", name="Produk", exact=True).click()
+            self._pilih_tidak_peka("ps-ref", t["item"])
+            pg.locator("#ps-jumlah").fill(f"{t['jumlah']:g}")
+            pg.locator("#ps-masuk").fill(t["tanggal_masuk"])
+            self._simpan()
+        elif jenis == "alur_proses":
+            self.buka("proses")
+            self.catat(f"Mencatat alur proses {t['judul']}")
+            self._tombol_tambah("Diagram Alur Proses Produksi").click()
+            pg.locator("#ap-judul").fill(t["judul"])
+            langkah_list = t["langkah"] if isinstance(t["langkah"], list) else [x.strip() for x in str(t["langkah"]).split(";") if x.strip()]
+            pg.locator("#ap-langkah").fill("\n".join(langkah_list))
+            self._simpan()
+        elif jenis == "hasil_produksi":
+            self.buka("proses")
+            self.catat(f"Mencatat hasil produksi {t['produk']}")
+            self._tombol_tambah("Catatan Hasil Produksi").click()
+            self._pilih_tidak_peka("hp-produk", t["produk"])
+            pg.locator("#hp-jumlah").fill(f"{t['jumlah']:g}")
+            pg.locator("#hp-produksi").fill(t["tanggal_produksi"])
+            self._simpan()
+        elif jenis == "distribusi":
+            self.buka("proses")
+            self.catat(f"Mencatat distribusi {t['produk']} ke {t['tujuan']}")
+            self._tombol_tambah("Catatan Distribusi atau Penjualan Produk").click()
+            pg.locator("#ds-tujuan").fill(t["tujuan"])
+            self._pilih_tidak_peka("ds-produk", t["produk"])
+            pg.locator("#ds-jumlah").fill(f"{t['jumlah']:g}")
+            pg.locator("#ds-tanggal").fill(t["tanggal"])
+            self._simpan()
         elif jenis == "petakan":
             self.buka("produk")
             self.catat(f"Memetakan produk {t['produk']} ke fasilitas")
@@ -304,6 +501,32 @@ class _Layar:
                 kotak.click()
             pg.get_by_role("button", name="Simpan", exact=True).click()
             pg.get_by_text("Pemetaan produk tersimpan").first.wait_for()
+        elif jenis == "tanda_tangan":
+            self.buka("pemantauan")
+            self.catat("Mengunggah dokumen tanda tangan dan komitmen")
+            self._tombol_tambah("Tanda Tangan").click()
+            self._unggah_berkas("tt-pj", t["pj"], t.get("path_pj") or "")
+            self._unggah_berkas("tt-ttd", t.get("penyelia") or t["pj"], t.get("path_penyelia") or "")
+            self._simpan()
+        elif jenis == "dokumen_lain":
+            self.buka("pemantauan")
+            self.catat(f"Mengunggah dokumen pendukung {t['nama']}")
+            if pg.get_by_role("heading", name="Dokumen Lainnya").count() > 0:
+                self._tombol_tambah("Dokumen Lainnya").click()
+                pg.locator("#dl-nama").fill(t["nama"])
+                self._unggah_berkas("dl-berkas", t.get("berkas") or t["nama"], t.get("path") or "")
+                self._simpan()
+        elif jenis == "kirim_pengajuan":
+            self.catat("Mengirim pengajuan sertifikasi halal")
+            self.tab = None
+            pg.goto(f"{_base_url()}/pengajuan/{self.pid}")
+            pg.evaluate(
+                "c => { window.__kalaOperator = { ...(window.__kalaOperator || {}), catatan: c } }",
+                "Dikirim operator Kala atas konfirmasi pelaku usaha",
+            )
+            pg.get_by_role("button", name="Kirim", exact=True).click()
+            pg.get_by_role("button", name="Kirim pengajuan", exact=True).click()
+            pg.get_by_text("Terkirim").first.wait_for()
         else:
             raise ValueError(f"tugas tidak dikenal: {jenis}")
 

@@ -48,11 +48,16 @@ def hasil_fungsi_terakhir(req) -> dict:
 
 @pytest.fixture(autouse=True)
 def lingkungan(tmp_path, monkeypatch):
+    monkeypatch.setenv("TELEGRAM_NONAKTIF", "1")
     monkeypatch.setenv("GEMINI_API_KEY", "kunci-palsu")
     monkeypatch.setattr(T, "GENERATED_DIR", tmp_path)
     sm.muat_seed()
     sm._akun.clear()
+    from kawal_agent import operator_ui
+
+    operator_ui.reset_pemeriksa()
     yield
+    operator_ui.reset_pemeriksa()
 
 
 def pakai(skrip):
@@ -174,3 +179,195 @@ def test_jawaban_ragu_tidak_memasukkan_bahan():
     pid = asyncio.run(A.lihat_state(u))["pengajuan_id"]
     jalan(u, "ya tapi nanti dulu")
     assert sm._cari(pid)["bahan"]["daftarBahan"] == []
+
+
+def test_instruksi_kala_memuat_aturan_orkestrator_operator_dan_pemeriksa():
+    from kawal_agent import prompts
+
+    assert prompts.INSTRUKSI_KALA == prompts.INSTRUKSI
+    assert "lihat_progres" in prompts.INSTRUKSI_KALA
+    assert "pemeriksa" in prompts.INSTRUKSI_KALA.lower()
+    assert "latar belakang" in prompts.INSTRUKSI_KALA.lower()
+    assert "YA atau TIDAK" in prompts.INSTRUKSI_KALA
+    assert "selisih_pemeriksa" in prompts.INSTRUKSI_KALA
+    assert "latar belakang" in prompts.INSTRUKSI_OPERATOR.lower()
+    assert "pemeriksa" in prompts.INSTRUKSI_OPERATOR.lower()
+
+
+def test_kala_menyebutkan_proses_operator_latar_belakang_saat_tugas_dijadwalkan(monkeypatch):
+    from kawal_agent import operator_ui
+
+    monkeypatch.setenv("KALA_OPERATOR", "ui")
+    antrean_dijadwalkan = []
+
+    def serahkan_palsu(state, ref):
+        pid = state.get("pengajuan_id")
+        antrean_dijadwalkan.append((pid, ref))
+        return {
+            "disinkronkan": True,
+            "mode": "operator_ui",
+            "bahan_ditahan_menunggu_konfirmasi": [],
+            "pesan": "Operator Kala mengisi formulir SIHALAL di latar belakang dan hasilnya muncul bertahap dalam beberapa detik.",
+        }
+
+    monkeypatch.setattr(operator_ui, "serahkan", serahkan_palsu)
+    monkeypatch.setattr(operator_ui, "tunggu", lambda pid, batas=60.0: True)
+
+    pakai([
+        # Giliran 1: Kala menjadwalkan produk & bahan, membaca info mode operator_ui dari tool, dan mengabarkan proses latar belakang
+        lambda r: panggil("pilih_kategori", kategori="makanan"),
+        lambda r: panggil(
+            "daftarkan_akun_sihalal",
+            nama_usaha="Bakso Maju",
+            nama_penanggung_jawab="Budi",
+            email="budi@example.com",
+            no_hp="081234567892",
+            nib="9120001234568",
+            alamat="Jl. Melati 2",
+            kab_kota="Bandung",
+            provinsi="Jawa Barat",
+            kode_pos="40135",
+            skala="mikro",
+        ),
+        lambda r: panggil("buat_draf_pengajuan", jalur="self-declare"),
+        lambda r: panggil("catat_produk", nama="Bakso Sapi", merek="Bakso Maju", rincian="Produk olahan daging"),
+        lambda r: teks("Operator kami sedang menyiapkan draf di latar belakang: " + hasil_fungsi_terakhir(r)["pesan"]),
+        # Giliran 2: Model nakal mencoba mengklaim formulir sudah berhasil tersimpan dan terpetakan sebelum divalidasi lihat_progres/pemeriksa
+        lambda r: panggil(
+            "tambah_bahan",
+            nama="Kecap manis",
+            jenis="bahan",
+            produsen="Kecap Cap Layar",
+            nomor_sertifikat="ID1230000100101",
+            pemasok="Toko A",
+            jenis_hewan="",
+            foto_bukti="",
+        ),
+        lambda r: teks("Formulir SIHALAL sudah berhasil tersimpan dan terpetakan serta pengajuan sudah selesai."),
+    ])
+
+    u = "+628120"
+    r1 = jalan(u, "tolong siapkan draf bakso")
+    assert len(antrean_dijadwalkan) >= 1
+    assert "latar belakang" in r1["balasan"].lower()
+
+    r2 = jalan(u, "tambah kecap manis")
+    assert "latar belakang" in r2["balasan"].lower()
+    assert "pemeriksa" in r2["balasan"].lower()
+    assert asyncio.run(A.lihat_state(u)).get("penyelarasan_orkestrator") == 1
+
+
+def test_kala_tidak_menyatakan_pengajuan_selesai_jika_pemeriksa_melaporkan_selisih():
+    from kawal_agent import sinkron as sk
+
+    pakai([
+        # Giliran 1: siapkan draf, produk, dan 2 bahan
+        lambda r: panggil("pilih_kategori", kategori="makanan"),
+        lambda r: panggil(
+            "daftarkan_akun_sihalal",
+            nama_usaha="Warung Bakso Sari",
+            nama_penanggung_jawab="Sari",
+            email="sari@example.com",
+            no_hp="081234567893",
+            nib="9120001234569",
+            alamat="Jl. Kenanga 3",
+            kab_kota="Bandung",
+            provinsi="Jawa Barat",
+            kode_pos="40135",
+            skala="mikro",
+        ),
+        lambda r: panggil("buat_draf_pengajuan", jalur="self-declare"),
+        lambda r: panggil("catat_produk", nama="Bakso Sapi", merek="Bakso Sari", rincian="Produk olahan daging"),
+        lambda r: panggil(
+            "tambah_bahan",
+            nama="Kecap manis",
+            jenis="bahan",
+            produsen="Kecap Cap Layar",
+            nomor_sertifikat="ID1230000100101",
+            pemasok="Toko A",
+            jenis_hewan="",
+            foto_bukti="",
+        ),
+        lambda r: panggil(
+            "tambah_bahan",
+            nama="Tepung tapioka",
+            jenis="bahan",
+            produsen="",
+            nomor_sertifikat="",
+            pemasok="Pasar",
+            jenis_hewan="",
+            foto_bukti="",
+        ),
+        lambda r: teks("Produk dan bahan sudah dicatat."),
+        # Giliran 2: periksa_pengajuan mendeteksi selisih dari pemeriksa, namun model mencoba mengklaim pengajuan sudah selesai
+        lambda r: panggil("periksa_pengajuan"),
+        lambda r: teks("Semua data sudah lengkap dan pengajuan sudah selesai serta siap dikirim."),
+        # Giliran 3: lihat_progres juga menyalurkan selisih_pemeriksa ke konteks Kala
+        lambda r: panggil("lihat_progres"),
+        lambda r: teks("Catatan pemeriksa: " + "; ".join(hasil_fungsi_terakhir(r)["selisih_pemeriksa"])),
+    ])
+
+    u = "+628121"
+    jalan(u, "daftar bakso")
+    pid = asyncio.run(A.lihat_state(u))["pengajuan_id"]
+
+    # Buat selisih nyata di SIHALAL: hapus Tepung tapioka dari daftarBahan
+    with sm._kunci:
+        p = sm._cari(pid)
+        p["bahan"]["daftarBahan"] = [
+            b for b in p["bahan"]["daftarBahan"] if sk._norm(b["nama"]) != "tepung tapioka"
+        ]
+
+    r2 = jalan(u, "apakah sudah selesai?")
+    assert "belum selesai" in r2["balasan"].lower()
+    assert "Tepung tapioka" in r2["balasan"]
+    assert asyncio.run(A.lihat_state(u)).get("penyelarasan_orkestrator") == 1
+
+    r3 = jalan(u, "lihat progresnya")
+    assert "Tepung tapioka" in r3["balasan"]
+
+
+def test_kala_menjaga_gerbang_persetujuan_ya_tidak_untuk_rph_dan_gelatin():
+    pakai([
+        # Giliran 1: tambah bahan kritis daging sapi dengan RPH belum terdaftar -> ditahan gerbang konfirmasi
+        lambda r: panggil("pilih_kategori", kategori="makanan"),
+        lambda r: panggil(
+            "daftarkan_akun_sihalal",
+            nama_usaha="Bakso Amanah",
+            nama_penanggung_jawab="Hasan",
+            email="hasan@example.com",
+            no_hp="081234567894",
+            nib="9120001234570",
+            alamat="Jl. Dahlia 4",
+            kab_kota="Bandung",
+            provinsi="Jawa Barat",
+            kode_pos="40135",
+            skala="mikro",
+        ),
+        lambda r: panggil("buat_draf_pengajuan", jalur="self-declare"),
+        lambda r: panggil(
+            "tambah_bahan",
+            nama="Daging sapi",
+            jenis="bahan",
+            produsen="",
+            nomor_sertifikat="",
+            pemasok="Lapak Pasar Tanpa Sertifikat",
+            jenis_hewan="sapi",
+            foto_bukti="",
+        ),
+        lambda r: teks("Daging sapi dari lapak tersebut belum memiliki sertifikat RPH halal. Tetap masukkan? Balas YA atau TIDAK."),
+        # Giliran 2: pengguna membalas TIDAK -> bahan tidak dimasukkan ke SIHALAL
+        lambda r: panggil("lihat_progres"),
+        lambda r: teks("Keputusan: " + str((hasil_fungsi_terakhir(r)["keputusan_terakhir"] or {}).get("keputusan"))),
+    ])
+
+    u = "+628122"
+    r1 = jalan(u, "tambah daging sapi")
+    assert "YA atau TIDAK" in r1["balasan"]
+    pid = asyncio.run(A.lihat_state(u))["pengajuan_id"]
+    assert sm._cari(pid)["bahan"]["daftarBahan"] == []
+
+    r2 = jalan(u, "tidak")
+    assert "ditolak" in r2["balasan"]
+    assert sm._cari(pid)["bahan"]["daftarBahan"] == []
+

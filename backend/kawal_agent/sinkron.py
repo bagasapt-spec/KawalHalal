@@ -168,45 +168,46 @@ def sinkron(state, ref: str = "", lewati=frozenset()) -> dict:
             tulis("pemetaan", _milik_pengguna(p["pemetaan"]) + pemetaan_sendiri, "Memetakan produk ke fasilitas produksi")
 
         # ---- proses ----
-        proses = copy.deepcopy(p["proses"])
-        proses["alurProses"] = _milik_pengguna(proses["alurProses"]) + [
-            {"id": f"{AWALAN}al-{i}", "judul": r["judul"],
-             "langkah": [x.strip() for x in str(r.get("langkah", "")).split(";") if x.strip()], "sumber": sumber("Dari jawaban pengguna", 1.0)}
-            for i, r in enumerate(dok.get("proses", []), start=1)
-        ]
-        simpan = []
-        for i, r in enumerate(dok.get("penyimpanan", []), start=1):
-            jenis = "produk" if _norm(r.get("jenis", "")) == "produk" else "bahan"
-            ref_id = (id_produk if jenis == "produk" else id_bahan).get(_norm(r.get("item", "")))
-            if not ref_id:
-                tak_cocok.append(f"Penyimpanan '{r.get('item')}' belum cocok dengan {jenis} yang sudah masuk.")
-                continue
-            simpan.append({"id": f"{AWALAN}sp-{i}", "jenis": jenis, "refId": ref_id, "jumlah": _angka(r.get("jumlah")),
-                           "tanggalMasuk": r.get("tanggal_masuk", ""), "sumber": sumber("Dari jawaban pengguna", 1.0)})
-        proses["penyimpanan"] = _milik_pengguna(proses["penyimpanan"]) + simpan
-        hasil = []
-        for i, r in enumerate(dok.get("hasil", []), start=1):
-            pr_id = id_produk.get(_norm(r.get("produk", "")))
-            if not pr_id:
-                tak_cocok.append(f"Hasil produksi '{r.get('produk')}' belum cocok dengan produk yang sudah masuk.")
-                continue
-            hasil.append({"id": f"{AWALAN}hp-{i}", "produkId": pr_id, "jumlah": _angka(r.get("jumlah")),
-                          "tanggalProduksi": r.get("tanggal_produksi", ""), "sumber": sumber("Dari jawaban pengguna", 1.0)})
-        proses["hasilProduksi"] = _milik_pengguna(proses["hasilProduksi"]) + hasil
-        proses["distribusi"] = _milik_pengguna(proses["distribusi"]) + [
-            {k: v for k, v in {
-                "id": f"{AWALAN}ds-{i}", "tujuan": r.get("tujuan", ""), "produkId": id_produk.get(_norm(r.get("produk", ""))),
-                "jumlah": _angka(r["jumlah"]) if r.get("jumlah") else None, "sumber": sumber("Dari jawaban pengguna", 1.0),
-            }.items() if v not in (None, "")}
-            for i, r in enumerate(dok.get("distribusi", []), start=1)
-        ]
         lampiran = state.get("lampiran") or {}
-        if lampiran.get("layout") and pabrik_id:
-            proses["layout"] = _milik_pengguna(proses["layout"]) + [
-                {"id": f"{AWALAN}ly-1", "pabrikId": pabrik_id, "berkas": lampiran["layout"], "sumber": sumber("Foto dikirim pengguna", 1.0)}
+        if "proses" not in lewati:
+            proses = copy.deepcopy(p["proses"])
+            proses["alurProses"] = _milik_pengguna(proses["alurProses"]) + [
+                {"id": f"{AWALAN}al-{i}", "judul": r["judul"],
+                 "langkah": [x.strip() for x in str(r.get("langkah", "")).split(";") if x.strip()], "sumber": sumber("Dari jawaban pengguna", 1.0)}
+                for i, r in enumerate(dok.get("proses", []), start=1)
             ]
-        proses["pernyataanBebasBabi"] = _persetujuan(state, "bebas_babi", ref) or proses["pernyataanBebasBabi"]
-        tulis("proses", proses, "Menyelaraskan proses produksi dari percakapan")
+            simpan = []
+            for i, r in enumerate(dok.get("penyimpanan", []), start=1):
+                jenis = "produk" if _norm(r.get("jenis", "")) == "produk" else "bahan"
+                ref_id = (id_produk if jenis == "produk" else id_bahan).get(_norm(r.get("item", "")))
+                if not ref_id:
+                    tak_cocok.append(f"Penyimpanan '{r.get('item')}' belum cocok dengan {jenis} yang sudah masuk.")
+                    continue
+                simpan.append({"id": f"{AWALAN}sp-{i}", "jenis": jenis, "refId": ref_id, "jumlah": _angka(r.get("jumlah")),
+                               "tanggalMasuk": r.get("tanggal_masuk", ""), "sumber": sumber("Dari jawaban pengguna", 1.0)})
+            proses["penyimpanan"] = _milik_pengguna(proses["penyimpanan"]) + simpan
+            hasil = []
+            for i, r in enumerate(dok.get("hasil", []), start=1):
+                pr_id = id_produk.get(_norm(r.get("produk", "")))
+                if not pr_id:
+                    tak_cocok.append(f"Hasil produksi '{r.get('produk')}' belum cocok dengan produk yang sudah masuk.")
+                    continue
+                hasil.append({"id": f"{AWALAN}hp-{i}", "produkId": pr_id, "jumlah": _angka(r.get("jumlah")),
+                              "tanggalProduksi": r.get("tanggal_produksi", ""), "sumber": sumber("Dari jawaban pengguna", 1.0)})
+            proses["hasilProduksi"] = _milik_pengguna(proses["hasilProduksi"]) + hasil
+            proses["distribusi"] = _milik_pengguna(proses["distribusi"]) + [
+                {k: v for k, v in {
+                    "id": f"{AWALAN}ds-{i}", "tujuan": r.get("tujuan", ""), "produkId": id_produk.get(_norm(r.get("produk", ""))),
+                    "jumlah": _angka(r["jumlah"]) if r.get("jumlah") else None, "sumber": sumber("Dari jawaban pengguna", 1.0),
+                }.items() if v not in (None, "")}
+                for i, r in enumerate(dok.get("distribusi", []), start=1)
+            ]
+            if lampiran.get("layout") and pabrik_id:
+                proses["layout"] = _milik_pengguna(proses["layout"]) + [
+                    {"id": f"{AWALAN}ly-1", "pabrikId": pabrik_id, "berkas": lampiran["layout"], "sumber": sumber("Foto dikirim pengguna", 1.0)}
+                ]
+            proses["pernyataanBebasBabi"] = _persetujuan(state, "bebas_babi", ref) or proses["pernyataanBebasBabi"]
+            tulis("proses", proses, "Menyelaraskan proses produksi dari percakapan")
 
         # ---- komitmen ----
         if "komitmen" not in lewati:
@@ -221,18 +222,19 @@ def sinkron(state, ref: str = "", lewati=frozenset()) -> dict:
 
         # ---- pemantauan (tanda tangan) ----
         pemantauan = copy.deepcopy(p["pemantauan"])
-        if lampiran.get("tanda_tangan_pj") and lampiran.get("tanda_tangan_penyelia"):
+        if "pemantauan" not in lewati and lampiran.get("tanda_tangan_pj") and lampiran.get("tanda_tangan_penyelia"):
             penyelia_id = (p["data"]["penyeliaIds"] or [""])[0]
             pemantauan["tandaTangan"] = _milik_pengguna(pemantauan["tandaTangan"]) + [{
                 "id": f"{AWALAN}tt-1", "penanggungJawab": lampiran["tanda_tangan_pj"], "penyeliaId": penyelia_id,
                 "penyelia": lampiran["tanda_tangan_penyelia"], "sumber": sumber("Dokumen bertanda tangan dikirim pengguna", 1.0),
             }]
         berkas_xlsx = state.get("berkas_dibuat") or []
-        pemantauan["dokumenLain"] = _milik_pengguna(pemantauan["dokumenLain"]) + [
-            {"id": f"{AWALAN}dl-{i}", "nama": b["nama"], "berkas": {"nama": b["nama"], "url": b.get("url")}}
-            for i, b in enumerate(berkas_xlsx, start=1)
-        ]
-        tulis("pemantauan", pemantauan, "Menyelaraskan dokumen pendukung dari percakapan")
+        if "pemantauan" not in lewati or berkas_xlsx:
+            pemantauan["dokumenLain"] = _milik_pengguna(pemantauan["dokumenLain"]) + [
+                {"id": f"{AWALAN}dl-{i}", "nama": b["nama"], "berkas": {"nama": b["nama"], "url": b.get("url")}}
+                for i, b in enumerate(berkas_xlsx, start=1)
+            ]
+            tulis("pemantauan", pemantauan, "Menyelaraskan dokumen pendukung dari percakapan")
 
         kelengkapan = sm.hitung_kelengkapan(p)
 
